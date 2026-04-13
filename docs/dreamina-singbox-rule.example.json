@@ -1,0 +1,23 @@
+{
+  "route": {
+    "rules": [
+      {
+        "domain_suffix": [
+          "dreamina.capcut.com",
+          "dreamina-api.us.capcut.com",
+          "dreamina-api.capcut.com",
+          "mweb-api-sg.capcut.com",
+          "commerce.us.capcut.com",
+          "commerce.capcut.com",
+          "commerce-api.capcut.com",
+          "commerce-api-sg.capcut.com",
+          "imagex16-normal-us-ttp.capcutapi.us",
+          "imagex-normal-sg.capcutapi.com",
+          "capcutcdn.com",
+          "capcutcdn-us.com"
+        ],
+        "outbound": "proxy"
+      }
+    ]
+  }
+}

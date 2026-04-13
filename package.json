@@ -10,7 +10,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "start": "NODE_ENV=production node server/index.js",
-    "install:all": "npm install && cd server && npm install"
+    "install:all": "npm install && cd server && npm install",
+    "import:accounts": "node scripts/import_accounts.js"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
