@@ -3985,8 +3985,15 @@ app.post('/api/admin/accounts', authenticate, requireAdmin, async (req, res) => 
 // POST /api/admin/accounts/import - 批量导入账号文本
 app.post('/api/admin/accounts/import', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { text = '', overwriteExisting = true } = req.body || {};
+    const { text = '', overwriteExisting = true, autoSyncAfterImport = false } = req.body || {};
     const result = accountPoolService.importFromText(text, { overwriteExisting });
+    let syncJobId = null;
+
+    if (autoSyncAfterImport && Array.isArray(result.importedIds) && result.importedIds.length > 0) {
+      syncJobId = await accountService.startSyncBatch(result.importedIds);
+    }
+
+    result.syncJobId = syncJobId;
     res.json({ success: true, data: result });
   } catch (error) {
     res.status(400).json({ error: error.message });

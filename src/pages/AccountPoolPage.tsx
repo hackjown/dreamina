@@ -75,6 +75,7 @@ export default function AccountPoolPage() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importText, setImportText] = useState('');
   const [overwriteImportedAccounts, setOverwriteImportedAccounts] = useState(true);
+  const [autoSyncAfterImport, setAutoSyncAfterImport] = useState(true);
   const [importSubmitting, setImportSubmitting] = useState(false);
   const [showManualAddModal, setShowManualAddModal] = useState(false);
   const [manualEmail, setManualEmail] = useState('');
@@ -377,6 +378,7 @@ export default function AccountPoolPage() {
   const resetImportForm = () => {
     setImportText('');
     setOverwriteImportedAccounts(true);
+    setAutoSyncAfterImport(true);
   };
 
   const handleImportFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -399,6 +401,7 @@ export default function AccountPoolPage() {
       const result = await importAccountsBatch({
         text: importText,
         overwriteExisting: overwriteImportedAccounts,
+        autoSyncAfterImport,
       });
 
       const detail = [
@@ -408,10 +411,28 @@ export default function AccountPoolPage() {
         `跳过：${result.skipped}`,
         `错误：${result.errors}`,
       ];
+      if (result.syncJobId) {
+        detail.push('', '已自动启动积分/权益同步任务。');
+      }
       if (result.errorLines?.length) {
         detail.push('', '错误示例：', ...result.errorLines.slice(0, 5));
       }
       alert(`批量导入完成\n\n${detail.join('\n')}`);
+
+      if (result.syncJobId) {
+        setActiveSyncJobId(result.syncJobId);
+        setShowSyncModal(true);
+        setActiveSyncJob({
+          id: result.syncJobId,
+          total: result.imported,
+          processed: 0,
+          successCount: 0,
+          failCount: 0,
+          status: 'running',
+          logs: [`导入完成，正在自动同步 ${result.imported} 个账号的积分与权益...`],
+          startTime: new Date().toISOString(),
+        });
+      }
 
       resetImportForm();
       setShowImportModal(false);
@@ -995,10 +1016,23 @@ user2@example.com,password456,us-xxxxxxxxxxxx,12
                 </div>
               </label>
 
+              <label className="flex items-center gap-3 p-4 bg-[#0f111a] border border-gray-800 rounded-2xl cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoSyncAfterImport}
+                  onChange={(e) => setAutoSyncAfterImport(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-700 bg-gray-900 text-emerald-600 focus:ring-emerald-500"
+                />
+                <div>
+                  <div className="text-sm text-white">导入后自动同步积分和权益</div>
+                  <div className="text-xs text-gray-500">推荐开启，导入结束后自动发起后台检测任务</div>
+                </div>
+              </label>
+
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 text-sm text-amber-400 space-y-1">
                 <div>支持分隔符：`----`、英文逗号、Tab。</div>
                 <div>每行至少需要：邮箱 + 密码/SessionID 其中之一。</div>
-                <div>导入完成后可再点击“同步全量账号”统一校验积分和权益。</div>
+                <div>开启自动同步后，会仅同步本次导入成功的账号。</div>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-2">

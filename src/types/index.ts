@@ -598,6 +598,7 @@ export interface UpdateManualAccountPayload {
 export interface ImportAccountsPayload {
   text: string;
   overwriteExisting?: boolean;
+  autoSyncAfterImport?: boolean;
 }
 
 export interface ImportAccountsResult {
@@ -609,6 +610,7 @@ export interface ImportAccountsResult {
   errors: number;
   importedIds?: number[];
   errorLines?: string[];
+  syncJobId?: string | null;
 }
 
 export interface AccountPoolSummary {
