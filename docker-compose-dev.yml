@@ -1,14 +1,14 @@
 version: '3.8'
 
 services:
-  seedance:
+  dreamina:
     build:
       context: .
       dockerfile: Dockerfile
       args:
         - VITE_DEFAULT_SESSION_ID=${VITE_DEFAULT_SESSION_ID:-}
-    image: seedance-web:latest
-    container_name: seedance-web
+    image: dreamina-web:latest
+    container_name: dreamina-web
     ports:
       - "${PORT:-3001}:3001"
     environment:
@@ -27,8 +27,8 @@ services:
       retries: 3
       start_period: 30s
     networks:
-      - seedance-network
+      - dreamina-network
 
 networks:
-  seedance-network:
+  dreamina-network:
     driver: bridge
