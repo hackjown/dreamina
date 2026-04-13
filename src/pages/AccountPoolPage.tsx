@@ -961,7 +961,7 @@ export default function AccountPoolPage() {
 
       {showImportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#1c1f2e] border border-gray-800 rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="bg-[#1c1f2e] border border-gray-800 rounded-3xl w-full max-w-3xl max-h-[90vh] shadow-2xl overflow-y-auto animate-in fade-in zoom-in duration-200">
             <div className="p-6 border-b border-gray-800 flex items-center justify-between bg-gradient-to-r from-emerald-500/10 to-cyan-500/10">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <PlusIcon className="w-6 h-6 text-emerald-400" />
@@ -1035,17 +1035,17 @@ user2@example.com,password456,us-xxxxxxxxxxxx,12
                 <div>开启自动同步后，会仅同步本次导入成功的账号。</div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3 pt-2">
                 <button
                   onClick={() => !importSubmitting && setShowImportModal(false)}
-                  className="px-5 py-2.5 bg-gray-800 text-white rounded-xl hover:bg-gray-700 transition-all"
+                  className="w-full sm:w-auto px-5 py-2.5 bg-gray-800 text-white rounded-xl hover:bg-gray-700 transition-all"
                 >
                   取消
                 </button>
                 <button
                   onClick={handleImportAccounts}
                   disabled={importSubmitting || !importText.trim()}
-                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-emerald-500/20 transition-all disabled:opacity-60 flex items-center gap-2"
+                  className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-emerald-500/20 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
                 >
                   {importSubmitting ? <SpinnerIcon className="w-4 h-4 animate-spin" /> : <PlusIcon className="w-4 h-4" />}
                   {importSubmitting ? '导入中...' : '开始导入'}
@@ -1058,7 +1058,7 @@ user2@example.com,password456,us-xxxxxxxxxxxx,12
 
       {showManualAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#1c1f2e] border border-gray-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="bg-[#1c1f2e] border border-gray-800 rounded-3xl w-full max-w-2xl max-h-[90vh] shadow-2xl overflow-y-auto animate-in fade-in zoom-in duration-200">
             <div className="p-6 border-b border-gray-800 flex items-center justify-between bg-gradient-to-r from-cyan-500/10 to-purple-500/10">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <PlusIcon className="w-6 h-6 text-cyan-400" />
@@ -1133,17 +1133,17 @@ user2@example.com,password456,us-xxxxxxxxxxxx,12
                 邮箱必填；`SessionID` 和 `密码` 至少填一个。
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3 pt-2">
                 <button
                   onClick={() => !manualSubmitting && setShowManualAddModal(false)}
-                  className="px-5 py-2.5 bg-gray-800 text-white rounded-xl hover:bg-gray-700 transition-all"
+                  className="w-full sm:w-auto px-5 py-2.5 bg-gray-800 text-white rounded-xl hover:bg-gray-700 transition-all"
                 >
                   取消
                 </button>
                 <button
                   onClick={handleCreateManualAccount}
                   disabled={manualSubmitting}
-                  className="px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-purple-500 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-cyan-500/20 transition-all disabled:opacity-60 flex items-center gap-2"
+                  className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-purple-500 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-cyan-500/20 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
                 >
                   {manualSubmitting ? <SpinnerIcon className="w-4 h-4 animate-spin" /> : <PlusIcon className="w-4 h-4" />}
                   {manualSubmitting ? '添加中...' : '确认添加'}
@@ -1156,7 +1156,7 @@ user2@example.com,password456,us-xxxxxxxxxxxx,12
 
       {editingAccount && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#1c1f2e] border border-gray-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="bg-[#1c1f2e] border border-gray-800 rounded-3xl w-full max-w-2xl max-h-[90vh] shadow-2xl overflow-y-auto animate-in fade-in zoom-in duration-200">
             <div className="p-6 border-b border-gray-800 flex items-center justify-between bg-gradient-to-r from-amber-500/10 to-cyan-500/10">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <EditIcon className="w-6 h-6 text-amber-400" />
@@ -1218,17 +1218,17 @@ user2@example.com,password456,us-xxxxxxxxxxxx,12
                 编辑时会显示当前已保存密码；`SessionID` 和 `密码` 仍然至少保留一个。
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3 pt-2">
                 <button
                   onClick={() => closeEditModal()}
-                  className="px-5 py-2.5 bg-gray-800 text-white rounded-xl hover:bg-gray-700 transition-all"
+                  className="w-full sm:w-auto px-5 py-2.5 bg-gray-800 text-white rounded-xl hover:bg-gray-700 transition-all"
                 >
                   取消
                 </button>
                 <button
                   onClick={handleUpdateManualAccount}
                   disabled={editSubmitting}
-                  className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-cyan-500 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-amber-500/20 transition-all disabled:opacity-60 flex items-center gap-2"
+                  className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-amber-500 to-cyan-500 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-amber-500/20 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
                 >
                   {editSubmitting ? <SpinnerIcon className="w-4 h-4 animate-spin" /> : <EditIcon className="w-4 h-4" />}
                   {editSubmitting ? '保存中...' : '保存修改'}
@@ -1242,7 +1242,7 @@ user2@example.com,password456,us-xxxxxxxxxxxx,12
       {/* Batch Register Modal (remain same as original) */}
       {showRegisterModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#1c1f2e] border border-gray-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="bg-[#1c1f2e] border border-gray-800 rounded-3xl w-full max-w-2xl max-h-[90vh] shadow-2xl overflow-y-auto animate-in fade-in zoom-in duration-200">
             <div className="p-6 border-b border-gray-800 flex items-center justify-between bg-gradient-to-r from-purple-500/10 to-pink-500/10">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <PlusIcon className="w-6 h-6 text-purple-500" />
@@ -1394,7 +1394,7 @@ user2@example.com,password456,us-xxxxxxxxxxxx,12
       {/* Sync Credits Modal */}
       {showSyncModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#1c1f2e] border border-gray-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="bg-[#1c1f2e] border border-gray-800 rounded-3xl w-full max-w-2xl max-h-[90vh] shadow-2xl overflow-y-auto animate-in fade-in zoom-in duration-200">
             <div className="p-6 border-b border-gray-800 flex items-center justify-between bg-gradient-to-r from-blue-500/10 to-purple-500/10">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <RefreshIcon className={`w-6 h-6 text-blue-500 ${activeSyncJob?.status === 'running' ? 'animate-spin' : ''}`} />
@@ -1481,7 +1481,7 @@ user2@example.com,password456,us-xxxxxxxxxxxx,12
       {/* Refresh Session Modal */}
       {showRefreshModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#1c1f2e] border border-gray-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="bg-[#1c1f2e] border border-gray-800 rounded-3xl w-full max-w-2xl max-h-[90vh] shadow-2xl overflow-y-auto animate-in fade-in zoom-in duration-200">
             <div className="p-6 border-b border-gray-800 flex items-center justify-between bg-gradient-to-r from-cyan-500/10 to-blue-500/10">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <ShieldIcon className={`w-6 h-6 text-cyan-400 ${activeRefreshJob?.status === 'running' ? 'animate-pulse' : ''}`} />

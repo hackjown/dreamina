@@ -32,7 +32,7 @@ const PORT = process.env.PORT || 3001;
 const DEFAULT_SESSION_ID = process.env.VITE_DEFAULT_SESSION_ID || '';
 
 app.use(cors());
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '20mb' }));
 
 app.use((req, res, next) => {
   if (
@@ -1931,6 +1931,12 @@ app.get('/api/video-proxy', async (req, res) => {
 
 // multer 错误处理
 app.use((err, _req, res, _next) => {
+  if (err?.type === 'entity.too.large') {
+    return res.status(413).json({ error: '请求内容过大，请拆分导入或缩小文件后重试（当前上限 20MB）' });
+  }
+  if (err instanceof SyntaxError && 'body' in err) {
+    return res.status(400).json({ error: '请求 JSON 格式错误，请检查导入内容后重试' });
+  }
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE')
       return res.status(413).json({ error: '文件大小超过限制 (最大20MB)' });

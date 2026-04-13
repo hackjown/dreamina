@@ -114,6 +114,30 @@ function cacheUser(user: User): void {
   emitAuthUserUpdated(user);
 }
 
+async function readJsonResponse<T = any>(response: Response): Promise<T> {
+  const text = await response.text();
+
+  if (!text) {
+    return {} as T;
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    if (/^\s*</.test(text)) {
+      if (response.status === 404) {
+        throw new Error('接口不存在，后端可能还未更新到最新版本');
+      }
+      if (response.status === 413) {
+        throw new Error('导入内容过大，请拆分后重试');
+      }
+      throw new Error(`服务器返回了 HTML 页面（HTTP ${response.status}），请检查后端是否已更新并正常运行`);
+    }
+
+    throw new Error(`服务器返回了非 JSON 数据（HTTP ${response.status}）`);
+  }
+}
+
 /**
  * 注册新用户
  */
@@ -790,8 +814,9 @@ export async function importAccountsBatch(payload: ImportAccountsPayload): Promi
     },
     body: JSON.stringify(payload),
   });
-  const data = await response.json();
+  const data = await readJsonResponse<{ error?: string; data?: ImportAccountsResult }>(response);
   if (!response.ok) throw new Error(data.error || '批量导入账号失败');
+  if (!data.data) throw new Error('服务器未返回导入结果');
   return data.data;
 }
 
