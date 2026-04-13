@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import {
   getAccountPool,
+  importAccountsBatch,
   createManualAccount,
   updateManualAccount,
   inspectAccount,
@@ -71,6 +72,10 @@ export default function AccountPoolPage() {
   const [regProvider, setRegProvider] = useState('tempmail.lol');
   const [reg2925Email, setReg2925Email] = useState('');
   const [reg2925Password, setReg2925Password] = useState('');
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [overwriteImportedAccounts, setOverwriteImportedAccounts] = useState(true);
+  const [importSubmitting, setImportSubmitting] = useState(false);
   const [showManualAddModal, setShowManualAddModal] = useState(false);
   const [manualEmail, setManualEmail] = useState('');
   const [manualPassword, setManualPassword] = useState('');
@@ -369,6 +374,59 @@ export default function AccountPoolPage() {
     setManualInspectAfterCreate(true);
   };
 
+  const resetImportForm = () => {
+    setImportText('');
+    setOverwriteImportedAccounts(true);
+  };
+
+  const handleImportFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      setImportText(text);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '读取文件失败');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const handleImportAccounts = async () => {
+    try {
+      setImportSubmitting(true);
+      const result = await importAccountsBatch({
+        text: importText,
+        overwriteExisting: overwriteImportedAccounts,
+      });
+
+      const detail = [
+        `总行数：${result.total}`,
+        `新增：${result.created}`,
+        `更新：${result.updated}`,
+        `跳过：${result.skipped}`,
+        `错误：${result.errors}`,
+      ];
+      if (result.errorLines?.length) {
+        detail.push('', '错误示例：', ...result.errorLines.slice(0, 5));
+      }
+      alert(`批量导入完成\n\n${detail.join('\n')}`);
+
+      resetImportForm();
+      setShowImportModal(false);
+      if (page !== 1) {
+        setPage(1);
+      } else {
+        await loadAccounts(1);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '批量导入失败');
+    } finally {
+      setImportSubmitting(false);
+    }
+  };
+
   const openEditModal = (account: Account) => {
     setEditingAccount(account);
     setEditEmail(account.email || '');
@@ -532,15 +590,15 @@ export default function AccountPoolPage() {
     <div className="min-h-screen bg-[#0f111a] p-6 pb-24">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between gap-4 mb-8 flex-wrap">
           <div>
             <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
               <UsersIcon className="w-8 h-8 text-purple-500" />
               账号池管理
             </h1>
-            <p className="text-gray-400">管理自动化生成的 Dreamina 账号池，支持批量同步与分页展示。</p>
+            <p className="text-gray-400">管理自动化生成的 Dreamina 账号池，支持批量导入、同步与分页展示。</p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <button
               onClick={handleSyncAll}
               disabled={syncing}
@@ -548,6 +606,13 @@ export default function AccountPoolPage() {
             >
               {syncing ? <SpinnerIcon className="w-4 h-4 animate-spin" /> : <RefreshIcon className="w-4 h-4" />}
               {syncing ? '同步中...' : '同步全量账号'}
+            </button>
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="px-6 py-2.5 bg-gray-800 text-white rounded-xl font-medium hover:bg-gray-700 transition-all flex items-center gap-2 border border-gray-700"
+            >
+              <PlusIcon className="w-5 h-5" />
+              批量导入账号
             </button>
             <button
               onClick={() => setShowManualAddModal(true)}
@@ -605,7 +670,7 @@ export default function AccountPoolPage() {
               <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
                 <UsersIcon className="w-8 h-8 text-gray-500" />
               </div>
-              <p className="text-gray-400">暂无账号，请尝试点击“批量注册”</p>
+              <p className="text-gray-400">暂无账号，请尝试点击“批量导入账号”或“批量注册账号”</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -868,6 +933,90 @@ export default function AccountPoolPage() {
               >
                 <CloseIcon className="w-5 h-5" />
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#1c1f2e] border border-gray-800 rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6 border-b border-gray-800 flex items-center justify-between bg-gradient-to-r from-emerald-500/10 to-cyan-500/10">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <PlusIcon className="w-6 h-6 text-emerald-400" />
+                批量导入账号
+              </h3>
+              <button
+                onClick={() => !importSubmitting && setShowImportModal(false)}
+                className="p-2 text-gray-400 hover:text-white rounded-xl hover:bg-gray-800 transition-all"
+              >
+                <CloseIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-8 space-y-5">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                  <p className="text-sm text-white font-medium">支持粘贴文本，或直接读取 txt / csv 文件</p>
+                  <p className="text-xs text-gray-500 mt-1">推荐格式：邮箱----密码----Sessionid=xxx----0积分</p>
+                </div>
+                <label className="inline-flex items-center justify-center px-4 py-2.5 bg-gray-800 text-white rounded-xl border border-gray-700 hover:bg-gray-700 transition-all cursor-pointer">
+                  读取文件
+                  <input
+                    type="file"
+                    accept=".txt,.csv"
+                    onChange={handleImportFileChange}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              <textarea
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                rows={14}
+                placeholder={`示例：
+user1@example.com----password123----Sessionid=hk-xxxxxxxxxxxx----0积分
+user2@example.com,password456,us-xxxxxxxxxxxx,12
+# 以 # 或 // 开头的行会被忽略`}
+                className="w-full px-4 py-3 bg-[#0f111a] border border-gray-700 rounded-2xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all resize-y font-mono text-sm"
+              />
+
+              <label className="flex items-center gap-3 p-4 bg-[#0f111a] border border-gray-800 rounded-2xl cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={overwriteImportedAccounts}
+                  onChange={(e) => setOverwriteImportedAccounts(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-700 bg-gray-900 text-emerald-600 focus:ring-emerald-500"
+                />
+                <div>
+                  <div className="text-sm text-white">覆盖同邮箱已存在账号</div>
+                  <div className="text-xs text-gray-500">关闭后，重复邮箱会直接跳过</div>
+                </div>
+              </label>
+
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 text-sm text-amber-400 space-y-1">
+                <div>支持分隔符：`----`、英文逗号、Tab。</div>
+                <div>每行至少需要：邮箱 + 密码/SessionID 其中之一。</div>
+                <div>导入完成后可再点击“同步全量账号”统一校验积分和权益。</div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  onClick={() => !importSubmitting && setShowImportModal(false)}
+                  className="px-5 py-2.5 bg-gray-800 text-white rounded-xl hover:bg-gray-700 transition-all"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleImportAccounts}
+                  disabled={importSubmitting || !importText.trim()}
+                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-emerald-500/20 transition-all disabled:opacity-60 flex items-center gap-2"
+                >
+                  {importSubmitting ? <SpinnerIcon className="w-4 h-4 animate-spin" /> : <PlusIcon className="w-4 h-4" />}
+                  {importSubmitting ? '导入中...' : '开始导入'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

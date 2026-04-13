@@ -595,6 +595,22 @@ export interface UpdateManualAccountPayload {
   provider?: string;
 }
 
+export interface ImportAccountsPayload {
+  text: string;
+  overwriteExisting?: boolean;
+}
+
+export interface ImportAccountsResult {
+  total: number;
+  imported: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: number;
+  importedIds?: number[];
+  errorLines?: string[];
+}
+
 export interface AccountPoolSummary {
   total: number;
   totalCredits: number;

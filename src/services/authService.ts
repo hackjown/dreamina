@@ -7,6 +7,8 @@ import type {
   AuthResponse,
   Account,
   AccountPoolSummary,
+  ImportAccountsPayload,
+  ImportAccountsResult,
   RegistrationJob,
   AccountBackgroundJob,
   ManualAccountPayload,
@@ -773,6 +775,23 @@ export async function createManualAccount(payload: ManualAccountPayload): Promis
   });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || '添加账号失败');
+  return data.data;
+}
+
+/**
+ * 批量导入账号到账号池
+ */
+export async function importAccountsBatch(payload: ImportAccountsPayload): Promise<ImportAccountsResult> {
+  const response = await fetch(`${API_BASE}/admin/accounts/import`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || '批量导入账号失败');
   return data.data;
 }
 

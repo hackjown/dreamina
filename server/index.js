@@ -17,6 +17,7 @@ import { jimengRequest as providerJimengRequest } from './services/videoGenerato
 import * as authService from './services/authService.js';
 import * as jimengSessionService from './services/jimengSessionService.js';
 import accountService from './services/account-service.js';
+import accountPoolService from './services/accountPoolService.js';
 import registrationService from './services/registration-service.js';
 import gptService from './services/gptService.js';
 import apiKeyService from './services/apiKeyService.js';
@@ -31,7 +32,7 @@ const PORT = process.env.PORT || 3001;
 const DEFAULT_SESSION_ID = process.env.VITE_DEFAULT_SESSION_ID || '';
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 
 app.use((req, res, next) => {
   if (
@@ -3976,6 +3977,17 @@ app.post('/api/admin/accounts', authenticate, requireAdmin, async (req, res) => 
   try {
     const account = await accountService.createManualAccount(req.body || {});
     res.json({ success: true, data: account });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// POST /api/admin/accounts/import - 批量导入账号文本
+app.post('/api/admin/accounts/import', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { text = '', overwriteExisting = true } = req.body || {};
+    const result = accountPoolService.importFromText(text, { overwriteExisting });
+    res.json({ success: true, data: result });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
