@@ -1,0 +1,69 @@
+# environment
+.env
+.env.local
+.env.*.local
+
+# macOS / editor
+.DS_Store
+.claude/
+.idea/
+.vscode/
+
+# dependencies
+node_modules/
+server/node_modules/
+
+# build outputs
+dist/
+coverage/
+
+# runtime data / databases
+data/
+server/data/
+database.sqlite
+*.sqlite
+*.sqlite3
+*.db
+
+# logs
+logs/
+*.log
+
+# temp files
+tmp/
+.tmp/
+server/tmp/
+server/tmp-*.mjs
+server/tmp*.mjs
+
+# debug captures / generated media
+debug_*.png
+debug_*.jpg
+debug_*.jpeg
+debug_*.webp
+debug_hk_*.png
+debug_us_*.png
+server/debug/
+server/debug_*.png
+server/debug_hk_*.png
+server/debug_us_*.png
+*.mp4
+
+# local verification / diagnostic scripts
+test_*.js
+test_*.mjs
+verify_*.js
+verify_*.mjs
+identify_*.mjs
+tmp-check-*.mjs
+server/test_*.js
+server/test_*.mjs
+server/verify_*.js
+server/verify_*.mjs
+server/diagnose_*.mjs
+server/inspect_*.mjs
+server/check_db.mjs
+server/seed_test_account.js
+
+# local reference data
+reference/
