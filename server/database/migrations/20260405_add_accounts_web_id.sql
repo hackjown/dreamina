@@ -1,0 +1,1 @@
+ALTER TABLE accounts ADD COLUMN web_id TEXT;

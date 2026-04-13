@@ -233,15 +233,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_jimeng_session_accounts_default_per_user
   ON jimeng_session_accounts(user_id)
   WHERE is_default = 1;
 
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
 -- 账号池表
 CREATE TABLE IF NOT EXISTS accounts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   email TEXT UNIQUE NOT NULL,
   password TEXT,
   session_id TEXT,
+  web_id TEXT,
   credits INTEGER DEFAULT 0,
   status TEXT DEFAULT 'active', -- active, inactive, out_of_credits, banned
   provider TEXT DEFAULT 'dreamina',

@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_PATH = path.join(__dirname, '../data/seedance.db');
+const DB_PATH = process.env.DREAMINA_DB_PATH || process.env.SEEDANCE_DB_PATH || path.join(__dirname, '../data/seedance.db');
 
 // 确保数据目录存在
 const dataDir = path.dirname(DB_PATH);
@@ -86,6 +86,12 @@ function shouldSkipMigration(db, file) {
     ].every((columnName) => columnNames.has(columnName));
   }
 
+  if (file === '20260405_add_accounts_web_id.sql') {
+    const columns = db.prepare(`PRAGMA table_info(accounts)`).all();
+    const columnNames = new Set(columns.map((column) => column.name));
+    return columnNames.has('web_id');
+  }
+
   if (file === '20260404_add_fast_zero_credit_ui_probe.sql') {
     const columns = db.prepare(`PRAGMA table_info(accounts)`).all();
     const columnNames = new Set(columns.map((column) => column.name));
@@ -112,6 +118,12 @@ function shouldSkipMigration(db, file) {
   if (file === '20260412_make_usernames_unique.sql') {
     const indexes = db.prepare(`PRAGMA index_list(users)`).all();
     return indexes.some((index) => index.name === 'idx_users_username_unique');
+  }
+
+  if (file === '20260402_add_task_generation_metadata.sql') {
+    const columns = db.prepare(`PRAGMA table_info(tasks)`).all();
+    const columnNames = new Set(columns.map((column) => column.name));
+    return ['media_type', 'model_id', 'provider_id'].every((columnName) => columnNames.has(columnName));
   }
 
   return false;
