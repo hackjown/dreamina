@@ -472,6 +472,15 @@ export interface Settings {
   ecommerce_video_api_url?: string;
   ecommerce_video_api_key?: string;
   ecommerce_video_model?: string;
+  gpt_image2_api_name?: string;
+  gpt_image2_api_url?: string;
+  gpt_image2_api_key?: string;
+  gpt_image2_model?: string;
+  gpt_image2_size?: string;
+  gpt_image2_quality?: string;
+  gpt_image2_aspect_ratio?: string;
+  gpt_image2_count?: string;
+  gpt_image2_output_size?: string;
 }
 
 /**

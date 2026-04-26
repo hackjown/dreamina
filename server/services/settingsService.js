@@ -48,12 +48,38 @@ const EDITABLE_SETTING_KEYS = new Set([
   'ecommerce_video_api_url',
   'ecommerce_video_api_key',
   'ecommerce_video_model',
+  'gpt_image2_api_name',
+  'gpt_image2_api_url',
+  'gpt_image2_api_key',
+  'gpt_image2_model',
+  'gpt_image2_size',
+  'gpt_image2_quality',
+  'gpt_image2_aspect_ratio',
+  'gpt_image2_count',
+  'gpt_image2_output_size',
 ]);
 
 const LEGACY_MODEL_SETTING_MAP = {
   'dreamina-seedance-1.0-mini': 'seedance-2.0-fast',
   'dreamina-seedance-1.5-pro': 'seedance-2.0',
 };
+
+const GPT_IMAGE2_RATIO_TO_SIZE = {
+  '1:1': '1024x1024',
+  '5:4': '1536x1024',
+  '9:16': '1024x1536',
+  '21:9': '1536x1024',
+  '16:9': '1536x1024',
+  '4:3': '1536x1024',
+  '3:2': '1536x1024',
+  '4:5': '1024x1536',
+  '3:4': '1024x1536',
+  '2:3': '1024x1536',
+};
+
+function getGptImage2SizeForRatio(ratio) {
+  return GPT_IMAGE2_RATIO_TO_SIZE[String(ratio || '').trim()] || '1024x1536';
+}
 
 function sanitizeSettingsRowMap(rows) {
   const settings = {};
@@ -90,6 +116,15 @@ function ensureDefaultSettings() {
       'gpt_mail_inbox_url': '',
       'gpt_ddg_inbox_url': '',
       'gpt_2925_inbox_url': 'https://2925.com/#/mailList',
+      'gpt_image2_api_name': '',
+      'gpt_image2_api_url': '',
+      'gpt_image2_api_key': '',
+      'gpt_image2_model': 'gpt-image-2',
+      'gpt_image2_size': '1024x1536',
+      'gpt_image2_quality': 'auto',
+      'gpt_image2_aspect_ratio': '3:4',
+      'gpt_image2_count': '1',
+      'gpt_image2_output_size': 'original',
     };
     
     for (const [key, value] of Object.entries(gptDefaults)) {
@@ -107,6 +142,17 @@ function ensureDefaultSettings() {
       SET value = ?, updated_at = CURRENT_TIMESTAMP
       WHERE key = 'model'
     `).run(normalizedModel);
+  }
+
+  const gptImage2Ratio = db.prepare(`SELECT value FROM settings WHERE key = 'gpt_image2_aspect_ratio'`).get()?.value || '3:4';
+  const expectedGptImage2Size = getGptImage2SizeForRatio(gptImage2Ratio);
+  const currentGptImage2Size = db.prepare(`SELECT value FROM settings WHERE key = 'gpt_image2_size'`).get()?.value;
+  if (currentGptImage2Size !== expectedGptImage2Size) {
+    db.prepare(`
+      UPDATE settings
+      SET value = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE key = 'gpt_image2_size'
+    `).run(expectedGptImage2Size);
   }
 }
 

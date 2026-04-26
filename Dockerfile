@@ -72,6 +72,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=server-deps /app/server/node_modules ./server/node_modules
 COPY server/package.json ./server/package.json
 COPY server/index.js server/browser-service.js ./server/
+COPY server/assets ./server/assets
 COPY server/database ./server/database
 COPY server/services ./server/services
 COPY server/ecommerce-image-suite ./server/ecommerce-image-suite

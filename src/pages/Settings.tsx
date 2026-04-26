@@ -17,6 +17,29 @@ import { PlusIcon, SparkleIcon, CheckIcon, CloseIcon, RefreshIcon } from '../com
 
 type EcommerceApiRole = 'analysis' | 'generation' | 'video';
 
+const GPT_IMAGE2_ASPECT_RATIO_OPTIONS = [
+  { label: '方形 1:1', value: '1:1', size: '1024x1024' },
+  { label: '横屏 5:4', value: '5:4', size: '1536x1024' },
+  { label: '故事 9:16', value: '9:16', size: '1024x1536' },
+  { label: '超宽屏 21:9', value: '21:9', size: '1536x1024' },
+  { label: '宽屏 16:9', value: '16:9', size: '1536x1024' },
+  { label: '横屏 4:3', value: '4:3', size: '1536x1024' },
+  { label: '宽幅 3:2', value: '3:2', size: '1536x1024' },
+  { label: '标准 4:5', value: '4:5', size: '1024x1536' },
+  { label: '竖版 3:4', value: '3:4', size: '1024x1536' },
+  { label: '竖版 2:3', value: '2:3', size: '1024x1536' },
+];
+
+const GPT_IMAGE2_OUTPUT_SIZE_OPTIONS = [
+  { label: '原图', value: 'original' },
+  { label: '2K 高清', value: '2k' },
+  { label: '4K 高清', value: '4k' },
+];
+
+function getGptImage2SizeForRatio(ratio: string) {
+  return GPT_IMAGE2_ASPECT_RATIO_OPTIONS.find((item) => item.value === ratio)?.size || '1024x1536';
+}
+
 export default function SettingsPage() {
   const { state, updateSettingsAction, currentUser } = useApp();
   const { settings } = state;
@@ -53,6 +76,15 @@ export default function SettingsPage() {
     ecommerce_video_api_url: settings.ecommerce_video_api_url || '',
     ecommerce_video_api_key: settings.ecommerce_video_api_key || '',
     ecommerce_video_model: settings.ecommerce_video_model || 'seedance-2.0-fast',
+    gpt_image2_api_name: settings.gpt_image2_api_name || '',
+    gpt_image2_api_url: settings.gpt_image2_api_url || '',
+    gpt_image2_api_key: settings.gpt_image2_api_key || '',
+    gpt_image2_model: settings.gpt_image2_model || 'gpt-image-2',
+    gpt_image2_size: getGptImage2SizeForRatio(settings.gpt_image2_aspect_ratio || '3:4'),
+    gpt_image2_quality: settings.gpt_image2_quality || 'auto',
+    gpt_image2_aspect_ratio: settings.gpt_image2_aspect_ratio || '3:4',
+    gpt_image2_count: settings.gpt_image2_count || '1',
+    gpt_image2_output_size: settings.gpt_image2_output_size || 'original',
   });
   const [profileForm, setProfileForm] = useState({
     username: currentUser?.username || '',
@@ -128,7 +160,9 @@ export default function SettingsPage() {
       !localSettings.ecommerce_analysis_api_url &&
       !localSettings.ecommerce_analysis_api_key &&
       !localSettings.ecommerce_generation_api_url &&
-      !localSettings.ecommerce_generation_api_key;
+      !localSettings.ecommerce_generation_api_key &&
+      !localSettings.gpt_image2_api_url &&
+      !localSettings.gpt_image2_api_key;
     if (Object.keys(settings).length > 0 && isEcommerceEmpty) {
       setLocalSettings(prev => ({
         ...prev,
@@ -571,7 +605,16 @@ export default function SettingsPage() {
       localSettings.ecommerce_video_provider !== (settings.ecommerce_video_provider || 'dreamina') ||
       localSettings.ecommerce_video_api_url !== (settings.ecommerce_video_api_url || '') ||
       localSettings.ecommerce_video_api_key !== (settings.ecommerce_video_api_key || '') ||
-      localSettings.ecommerce_video_model !== (settings.ecommerce_video_model || 'seedance-2.0-fast');
+      localSettings.ecommerce_video_model !== (settings.ecommerce_video_model || 'seedance-2.0-fast') ||
+      localSettings.gpt_image2_api_name !== (settings.gpt_image2_api_name || '') ||
+      localSettings.gpt_image2_api_url !== (settings.gpt_image2_api_url || '') ||
+      localSettings.gpt_image2_api_key !== (settings.gpt_image2_api_key || '') ||
+      localSettings.gpt_image2_model !== (settings.gpt_image2_model || 'gpt-image-2') ||
+      localSettings.gpt_image2_size !== getGptImage2SizeForRatio(settings.gpt_image2_aspect_ratio || '3:4') ||
+      localSettings.gpt_image2_quality !== (settings.gpt_image2_quality || 'auto') ||
+      localSettings.gpt_image2_aspect_ratio !== (settings.gpt_image2_aspect_ratio || '3:4') ||
+      localSettings.gpt_image2_count !== (settings.gpt_image2_count || '1') ||
+      localSettings.gpt_image2_output_size !== (settings.gpt_image2_output_size || 'original');
     setHasChanges(hasChanges);
   }, [localSettings, settings]);
 
@@ -1031,6 +1074,125 @@ export default function SettingsPage() {
           <p className="mt-4 text-xs text-gray-500">
             识别模型需支持图片输入；生图模型需支持图片生成。旧的 Model 配置仍作为兼容兜底。
           </p>
+        </div>
+
+        <div className="bg-[#1c1f2e] rounded-xl p-6 mb-6 border border-gray-800">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-lg font-bold">GPT Image 2 生图配置</h2>
+              <p className="text-sm text-gray-500 mt-1">用于 GPT Image 2 专用页面，接口按 OpenAI 兼容格式调用。</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">配置名称</label>
+              <input
+                type="text"
+                value={localSettings.gpt_image2_api_name}
+                onChange={(e) => setLocalSettings(prev => ({ ...prev, gpt_image2_api_name: e.target.value }))}
+                placeholder="例如：GPT Image 2 供应商"
+                className="w-full bg-[#0f111a] border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-fuchsia-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">API 地址 (Base URL)</label>
+              <input
+                type="text"
+                value={localSettings.gpt_image2_api_url}
+                onChange={(e) => setLocalSettings(prev => ({ ...prev, gpt_image2_api_url: e.target.value }))}
+                placeholder="https://api.example.com/v1"
+                className="w-full bg-[#0f111a] border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-fuchsia-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">API Key</label>
+              <input
+                type={showApiKey ? 'text' : 'password'}
+                value={localSettings.gpt_image2_api_key}
+                onChange={(e) => setLocalSettings(prev => ({ ...prev, gpt_image2_api_key: e.target.value }))}
+                placeholder="sk-..."
+                className="w-full bg-[#0f111a] border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-fuchsia-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">模型名称</label>
+              <input
+                type="text"
+                value={localSettings.gpt_image2_model}
+                onChange={(e) => setLocalSettings(prev => ({ ...prev, gpt_image2_model: e.target.value }))}
+                placeholder="gpt-image-2"
+                className="w-full bg-[#0f111a] border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-fuchsia-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">默认画面比例</label>
+              <select
+                value={localSettings.gpt_image2_aspect_ratio}
+                onChange={(e) => {
+                  const ratio = e.target.value;
+                  setLocalSettings(prev => ({
+                    ...prev,
+                    gpt_image2_aspect_ratio: ratio,
+                    gpt_image2_size: getGptImage2SizeForRatio(ratio),
+                  }));
+                }}
+                className="w-full bg-[#0f111a] border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-fuchsia-500"
+              >
+                {GPT_IMAGE2_ASPECT_RATIO_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">请求尺寸：{getGptImage2SizeForRatio(localSettings.gpt_image2_aspect_ratio)}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">默认张数</label>
+              <select
+                value={localSettings.gpt_image2_count}
+                onChange={(e) => setLocalSettings(prev => ({ ...prev, gpt_image2_count: e.target.value }))}
+                className="w-full bg-[#0f111a] border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-fuchsia-500"
+              >
+                <option value="1">1 张</option>
+                <option value="2">2 张</option>
+                <option value="3">3 张</option>
+                <option value="4">4 张</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">默认输出尺寸</label>
+              <select
+                value={localSettings.gpt_image2_output_size}
+                onChange={(e) => setLocalSettings(prev => ({ ...prev, gpt_image2_output_size: e.target.value }))}
+                className="w-full bg-[#0f111a] border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-fuchsia-500"
+              >
+                {GPT_IMAGE2_OUTPUT_SIZE_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">2K/4K 会作为提示词约束传给上游。</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">API 质量</label>
+              <select
+                value={localSettings.gpt_image2_quality}
+                onChange={(e) => setLocalSettings(prev => ({ ...prev, gpt_image2_quality: e.target.value }))}
+                className="w-full bg-[#0f111a] border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-fuchsia-500"
+              >
+                <option value="auto">auto</option>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+              </select>
+            </div>
+          </div>
+          <label className="mt-4 inline-flex items-center gap-2 text-xs text-gray-400">
+            <input
+              type="checkbox"
+              checked={showApiKey}
+              onChange={(e) => setShowApiKey(e.target.checked)}
+              className="rounded border-gray-700 bg-[#0f111a]"
+            />
+            显示 GPT Image 2 API Key
+          </label>
         </div>
 
 
@@ -1842,6 +2004,15 @@ export default function SettingsPage() {
                 ecommerce_video_api_url: settings.ecommerce_video_api_url || '',
                 ecommerce_video_api_key: settings.ecommerce_video_api_key || '',
                 ecommerce_video_model: settings.ecommerce_video_model || 'seedance-2.0-fast',
+                gpt_image2_api_name: settings.gpt_image2_api_name || '',
+                gpt_image2_api_url: settings.gpt_image2_api_url || '',
+                gpt_image2_api_key: settings.gpt_image2_api_key || '',
+                gpt_image2_model: settings.gpt_image2_model || 'gpt-image-2',
+                gpt_image2_size: getGptImage2SizeForRatio(settings.gpt_image2_aspect_ratio || '3:4'),
+                gpt_image2_quality: settings.gpt_image2_quality || 'auto',
+                gpt_image2_aspect_ratio: settings.gpt_image2_aspect_ratio || '3:4',
+                gpt_image2_count: settings.gpt_image2_count || '1',
+                gpt_image2_output_size: settings.gpt_image2_output_size || 'original',
               })
             }
             className="px-6 py-2.5 text-gray-400 hover:text-white transition-colors"

@@ -5,6 +5,7 @@ import {
   PackageIcon,
   DownloadIcon,
   SettingsIcon,
+  ImageIcon,
   MenuIcon,
   CloseIcon,
   UserIcon,
@@ -74,6 +75,13 @@ export default function Sidebar({ currentUser, onLogout }: SidebarProps) {
       path: '/ecommerce',
       icon: PackageIcon,
       accent: 'text-emerald-400',
+    },
+    {
+      id: 'GPT_IMAGE_2',
+      label: 'GPT Image 2',
+      path: '/gpt-image-2',
+      icon: ImageIcon,
+      accent: 'text-fuchsia-400',
     },
     {
       id: 'GPT_REGISTRAR',

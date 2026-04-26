@@ -22,6 +22,7 @@ import registrationService from './services/registration-service.js';
 import gptService from './services/gptService.js';
 import apiKeyService from './services/apiKeyService.js';
 import * as ecommerceService from './services/ecommerceService.js';
+import * as gptImage2Service from './services/gptImage2Service.js';
 import fs, { readFileSync } from 'fs';
 
 // 初始化数据库
@@ -2997,6 +2998,111 @@ app.put('/api/settings', (req, res) => {
   }
 });
 
+// -------------------- GPT Image 2 专用生图 --------------------
+const GPT_IMAGE2_RATIO_TO_SIZE = {
+  '1:1': '1024x1024',
+  '5:4': '1536x1024',
+  '9:16': '1024x1536',
+  '21:9': '1536x1024',
+  '16:9': '1536x1024',
+  '4:3': '1536x1024',
+  '3:2': '1536x1024',
+  '4:5': '1024x1536',
+  '3:4': '1024x1536',
+  '2:3': '1024x1536',
+};
+
+function resolveGptImage2SizeFromRatio(ratio) {
+  return GPT_IMAGE2_RATIO_TO_SIZE[String(ratio || '').trim()] || null;
+}
+
+app.get('/api/gpt-image2/prompts', authenticate, (req, res) => {
+  try {
+    res.json({ success: true, data: gptImage2Service.listPromptLibrary() });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/gpt-image2/prompts', authenticate, upload.array('images', 4), async (req, res) => {
+  try {
+    let media = [];
+    if (req.body.media) {
+      try {
+        media = JSON.parse(req.body.media);
+      } catch {
+        media = [];
+      }
+    }
+    const settings = settingsService.getAllSettings();
+    const item = await gptImage2Service.addCustomPrompt({
+      text: req.body.text,
+      author: req.body.author || req.user?.username || '自定义',
+      lang: req.body.lang || 'zh',
+      files: req.files || [],
+      media,
+      translationConfig: {
+        apiKey: settings.ecommerce_analysis_api_key || settings.ecommerce_api_key,
+        baseUrl: settings.ecommerce_analysis_api_url || settings.ecommerce_api_url,
+        model: settings.ecommerce_analysis_model || settings.ecommerce_model,
+      },
+    });
+    res.json({ success: true, data: item });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/gpt-image2/prompt-media/:fileName', (req, res) => {
+  try {
+    const filePath = gptImage2Service.resolvePromptMediaPath(req.params.fileName);
+    if (!filePath) {
+      return res.status(404).json({ success: false, error: '示例图片不存在' });
+    }
+    res.sendFile(filePath);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/gpt-image2/generate', authenticate, upload.array('images', 5), async (req, res) => {
+  try {
+    const settings = settingsService.getAllSettings();
+    const fallbackSize = resolveGptImage2SizeFromRatio(req.body.aspectRatio || settings.gpt_image2_aspect_ratio)
+      || settings.gpt_image2_size
+      || '1024x1024';
+    const result = await gptImage2Service.generateImage({
+      config: {
+        apiKey: settings.gpt_image2_api_key,
+        baseUrl: settings.gpt_image2_api_url,
+        model: settings.gpt_image2_model,
+      },
+      prompt: req.body.prompt,
+      mode: req.body.mode,
+      files: req.files || [],
+      size: req.body.size || fallbackSize,
+      quality: req.body.quality || settings.gpt_image2_quality || 'auto',
+      count: req.body.count || settings.gpt_image2_count || 1,
+    });
+    res.json({ success: true, data: { images: result } });
+  } catch (error) {
+    console.error('[gpt-image2] 生成失败:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/gpt-image2/output/:fileName', (req, res) => {
+  try {
+    const filePath = gptImage2Service.resolveOutputPath(req.params.fileName);
+    if (!filePath) {
+      return res.status(404).json({ success: false, error: '图片不存在' });
+    }
+    res.sendFile(filePath);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // GET /api/settings/session-accounts - 获取当前用户的 SessionID 账号列表
 app.get('/api/settings/session-accounts', authenticate, (req, res) => {
   try {
@@ -4402,15 +4508,6 @@ app.delete('/api/gpt/jobs/:id', authenticate, async (req, res) => {
   }
 });
 
-// 生产模式: 提供前端静态文件
-if (process.env.NODE_ENV === 'production') {
-  const distPath = path.join(__dirname, '../dist');
-  app.use(express.static(distPath));
-  app.get('*', (_req, res) => {
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
-}
-
 // 优雅关闭: 清理浏览器进程
 process.on('SIGTERM', () => {
   console.log('[server] 收到 SIGTERM，正在关闭...');
@@ -5000,6 +5097,19 @@ app.get('/api/ecommerce/upload/:fileName', (req, res) => {
     res.status(404).json({ error: '文件不存在' });
   }
 });
+
+// 生产模式: 必须在所有 API 路由之后提供前端静态文件。
+// 否则 app.get('*') 会吞掉后面定义的 GET API（例如电商生成轮询和图片输出）。
+if (process.env.NODE_ENV === 'production') {
+  const distPath = path.join(__dirname, '../dist');
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ error: 'API endpoint not found' });
+  });
+  app.use(express.static(distPath));
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
 
 const recoveredInterruptedTaskIds = recoverInterruptedGeneratingTasks({ isAdmin: true });
 

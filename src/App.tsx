@@ -12,6 +12,7 @@ import DownloadManagementPage from './pages/DownloadManagement';
 import AccountPoolPage from './pages/AccountPoolPage';
 import GPTRegistrarPage from './pages/GPTRegistrarPage';
 import EcommerceSuitePage from './pages/EcommerceSuitePage';
+import GptImage2Page from './pages/GptImage2Page';
 import type { User } from './types';
 import { getCurrentUser, subscribeAuthUserUpdates } from './services/authService';
 
@@ -193,6 +194,16 @@ function AppContent() {
             <ProtectedRoute currentUser={currentUser}>
               <MainLayout currentUser={currentUser} onLogout={handleLogout}>
                 <EcommerceSuitePage />
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/gpt-image-2"
+          element={
+            <ProtectedRoute currentUser={currentUser}>
+              <MainLayout currentUser={currentUser} onLogout={handleLogout}>
+                <GptImage2Page />
               </MainLayout>
             </ProtectedRoute>
           }
