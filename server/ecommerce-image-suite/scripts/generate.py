@@ -1192,19 +1192,30 @@ def _prepare_openai_edit_image(path_or_url: str, index: int) -> tuple[str, bytes
     """Prepare one multipart image[] upload for OpenAI-compatible edits.
 
     Some compatible gateways currently accept image edits only when the upload is
-    PNG. Convert local JPEG/WebP references through macOS sips when available.
+    PNG. Convert local JPEG/WebP references through Pillow when available, with
+    macOS sips as a local fallback.
     """
     upload_source = path_or_url
     temp_path = None
     if not path_or_url.startswith(("http://", "https://", "data:")):
         p = Path(path_or_url)
         if p.exists() and p.suffix.lower() != ".png":
-            sips_bin = shutil.which("sips")
-            if sips_bin:
-                fd, tmp_name = tempfile.mkstemp(prefix="ecommerce_openai_edit_", suffix=".png")
-                os.close(fd)
-                temp_path = tmp_name
+            fd, tmp_name = tempfile.mkstemp(prefix="ecommerce_openai_edit_", suffix=".png")
+            os.close(fd)
+            temp_path = tmp_name
+            try:
                 try:
+                    from PIL import Image
+
+                    with Image.open(p) as img:
+                        if img.mode not in ("RGB", "RGBA"):
+                            img = img.convert("RGBA" if "A" in img.getbands() else "RGB")
+                        img.save(tmp_name, format="PNG")
+                    upload_source = tmp_name
+                except Exception:
+                    sips_bin = shutil.which("sips")
+                    if not sips_bin:
+                        raise
                     subprocess.run(
                         [sips_bin, "-s", "format", "png", str(p), "--out", tmp_name],
                         check=True,
@@ -1212,13 +1223,13 @@ def _prepare_openai_edit_image(path_or_url: str, index: int) -> tuple[str, bytes
                         stderr=subprocess.DEVNULL,
                     )
                     upload_source = tmp_name
-                except Exception:
-                    try:
-                        os.remove(tmp_name)
-                    except OSError:
-                        pass
-                    temp_path = None
-                    upload_source = path_or_url
+            except Exception:
+                try:
+                    os.remove(tmp_name)
+                except OSError:
+                    pass
+                temp_path = None
+                upload_source = path_or_url
 
     try:
         b64_data, mime = _to_base64_and_mime(upload_source)

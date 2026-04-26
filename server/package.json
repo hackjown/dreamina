@@ -12,6 +12,7 @@
     "node-cron": "^3.0.3",
     "nodemailer": "^8.0.4",
     "playwright-core": "^1.49.0",
+    "sharp": "^0.34.5",
     "ws": "^8.20.0"
   }
 }

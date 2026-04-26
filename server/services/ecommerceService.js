@@ -2,11 +2,9 @@ import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { createRequire } from 'module';
 import { generateSeedanceImage, generateSeedanceVideo } from './videoGenerator.js';
 import * as jimengSessionService from './jimengSessionService.js';
 
-const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const EXTERNAL_PATH = process.env.ECOMMERCE_SUITE_PATH
   || path.resolve(__dirname, '../ecommerce-image-suite');
@@ -33,7 +31,6 @@ const DREAMINA_ECOMMERCE_VIDEO_MODELS = new Set([
   'dreamina-video-3.0',
   'dreamina-video-3.0-pro',
 ]);
-const BUNDLED_NODE_MODULES = '/Users/tuo/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules';
 let sharpModulePromise = null;
 const DEFAULT_ECOMMERCE_TYPES = 'white_bg,key_features,selling_pt,material,lifestyle,model,multi_scene,ecommerce_detail';
 const DEFAULT_ECOMMERCE_TYPE_LIST = [
@@ -139,6 +136,32 @@ async function resizeImageForAnalysis(imagePath) {
   const baseName = path.basename(imagePath, ext);
   const outputPath = path.join(ANALYSIS_INPUTS_DIR, `${baseName}_max${ANALYSIS_MAX_SIDE}${ext}`);
 
+  const sharp = await loadSharpModule();
+  if (sharp) {
+    try {
+      const image = sharp(imagePath, { failOn: 'none' });
+      const metadata = await image.metadata();
+      const width = metadata.width || 0;
+      const height = metadata.height || 0;
+      if (!width || !height || Math.max(width, height) <= ANALYSIS_MAX_SIDE) {
+        return imagePath;
+      }
+
+      await image
+        .resize({
+          width: width >= height ? ANALYSIS_MAX_SIDE : undefined,
+          height: height > width ? ANALYSIS_MAX_SIDE : undefined,
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .toFile(outputPath);
+      console.log(`[ecommerceService] Analysis image resized: ${path.basename(imagePath)} -> ${path.basename(outputPath)}`);
+      return outputPath;
+    } catch (error) {
+      console.warn(`[ecommerceService] Sharp image resize failed, trying sips: ${imagePath}. ${error.message}`);
+    }
+  }
+
   return new Promise((resolve) => {
     const process = spawn('sips', ['-Z', String(ANALYSIS_MAX_SIDE), imagePath, '--out', outputPath]);
     let stderr = '';
@@ -177,36 +200,59 @@ async function compressImageForVideoForm(imagePath) {
   const ext = path.extname(imagePath).toLowerCase() || '.jpg';
   const baseName = path.basename(imagePath, ext);
   let smallestCandidate = null;
+  const sharp = await loadSharpModule();
 
   for (const maxSide of VIDEO_REFERENCE_MAX_SIDES) {
     const outputPath = path.join(VIDEO_INPUTS_DIR, `${baseName}_video_${maxSide}.jpg`);
-    const result = await new Promise((resolve) => {
-      const process = spawn('sips', [
-        '-s', 'format', 'jpeg',
-        '-s', 'formatOptions', '70',
-        '-Z', String(maxSide),
-        imagePath,
-        '--out',
-        outputPath,
-      ]);
-      let stderr = '';
+    let result = { ok: false, error: 'sharp unavailable' };
 
-      process.stderr.on('data', (data) => {
-        stderr += data.toString();
-      });
+    if (sharp) {
+      try {
+        await sharp(imagePath, { failOn: 'none' })
+          .rotate()
+          .resize({
+            width: maxSide,
+            height: maxSide,
+            fit: 'inside',
+            withoutEnlargement: true,
+          })
+          .jpeg({ quality: 70, mozjpeg: true })
+          .toFile(outputPath);
+        result = { ok: true, outputPath };
+      } catch (error) {
+        result = { ok: false, error: error.message };
+      }
+    }
 
-      process.on('close', (code) => {
-        if (code === 0 && fs.existsSync(outputPath)) {
-          resolve({ ok: true, outputPath });
-          return;
-        }
-        resolve({ ok: false, error: stderr.trim() });
-      });
+    if (!result.ok) {
+      result = await new Promise((resolve) => {
+        const process = spawn('sips', [
+          '-s', 'format', 'jpeg',
+          '-s', 'formatOptions', '70',
+          '-Z', String(maxSide),
+          imagePath,
+          '--out',
+          outputPath,
+        ]);
+        let stderr = '';
 
-      process.on('error', (error) => {
-        resolve({ ok: false, error: error.message });
+        process.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        process.on('close', (code) => {
+          if (code === 0 && fs.existsSync(outputPath)) {
+            resolve({ ok: true, outputPath });
+            return;
+          }
+          resolve({ ok: false, error: stderr.trim() });
+        });
+
+        process.on('error', (error) => {
+          resolve({ ok: false, error: error.message });
+        });
       });
-    });
+    }
 
     if (!result.ok) {
       console.warn(`[ecommerceService] Video reference image compression failed: ${imagePath}. ${result.error || ''}`);
@@ -410,10 +456,6 @@ async function loadSharpModule() {
     sharpModulePromise = (async () => {
       try {
         return (await import('sharp')).default;
-      } catch {}
-
-      try {
-        return require(path.join(BUNDLED_NODE_MODULES, 'sharp'));
       } catch {
         return null;
       }

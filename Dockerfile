@@ -77,7 +77,7 @@ COPY server/services ./server/services
 COPY server/ecommerce-image-suite ./server/ecommerce-image-suite
 COPY --from=frontend-build /app/dist ./dist
 
-RUN pip3 install --break-system-packages --no-cache-dir openai requests urllib3 httpx
+RUN pip3 install --break-system-packages --no-cache-dir openai requests urllib3 httpx pillow
 
 RUN mkdir -p /app/server/data /app/logs \
     && cd /app/server \
