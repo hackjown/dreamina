@@ -254,8 +254,8 @@ export default function AdminPage() {
             <div className="p-12 text-center text-red-400">{error}</div>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full min-w-[760px]">
                   <thead className="bg-[#0f111a]">
                     <tr>
                       <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">
@@ -292,7 +292,7 @@ export default function AdminPage() {
                           )}
                         </td>
                         <td className="px-6 py-4 text-sm">
-                          <span className={`px-2 py-1 rounded-lg text-xs font-medium ${
+                          <span className={`inline-flex whitespace-nowrap px-2 py-1 rounded-lg text-xs font-medium ${
                             user.role === 'admin'
                               ? 'bg-amber-500/20 text-amber-400'
                               : 'bg-gray-500/20 text-gray-400'
@@ -301,7 +301,7 @@ export default function AdminPage() {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-sm">
-                          <span className={`px-2 py-1 rounded-lg text-xs font-medium ${
+                          <span className={`inline-flex whitespace-nowrap px-2 py-1 rounded-lg text-xs font-medium ${
                             user.status === 'active'
                               ? 'bg-green-500/20 text-green-400'
                               : 'bg-red-500/20 text-red-400'
@@ -349,22 +349,22 @@ export default function AdminPage() {
               </div>
 
               {/* 分页 */}
-              <div className="p-6 border-t border-gray-800 flex items-center justify-between">
+              <div className="p-6 border-t border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <p className="text-sm text-gray-400">
                   共 {totalUsers} 个用户，第 {currentPage} / {totalPages} 页
                 </p>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
                   <button
                     onClick={() => loadUsers(currentPage - 1)}
                     disabled={currentPage <= 1}
-                    className="px-4 py-2 bg-[#0f111a] border border-gray-700 rounded-xl text-white text-sm hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    className="flex-1 sm:flex-none px-4 py-2 bg-[#0f111a] border border-gray-700 rounded-xl text-white text-sm hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
                     上一页
                   </button>
                   <button
                     onClick={() => loadUsers(currentPage + 1)}
                     disabled={currentPage >= totalPages}
-                    className="px-4 py-2 bg-[#0f111a] border border-gray-700 rounded-xl text-white text-sm hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    className="flex-1 sm:flex-none px-4 py-2 bg-[#0f111a] border border-gray-700 rounded-xl text-white text-sm hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
                     下一页
                   </button>

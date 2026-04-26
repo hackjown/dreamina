@@ -11,6 +11,7 @@ import SettingsPage from './pages/Settings';
 import DownloadManagementPage from './pages/DownloadManagement';
 import AccountPoolPage from './pages/AccountPoolPage';
 import GPTRegistrarPage from './pages/GPTRegistrarPage';
+import EcommerceSuitePage from './pages/EcommerceSuitePage';
 import type { User } from './types';
 import { getCurrentUser, subscribeAuthUserUpdates } from './services/authService';
 
@@ -46,9 +47,9 @@ function MainLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-[#0f111a]">
+    <div className="flex h-screen bg-[#0f111a] overflow-hidden">
       <Sidebar currentUser={currentUser} onLogout={onLogout} />
-      <main className="lg:pl-60 pt-16 lg:pt-0 min-h-screen">
+      <main className="flex-1 relative h-full overflow-y-auto custom-scrollbar pt-16 lg:pt-0">
         {children}
       </main>
     </div>
@@ -182,6 +183,16 @@ function AppContent() {
             <ProtectedRoute currentUser={currentUser}>
               <MainLayout currentUser={currentUser} onLogout={handleLogout}>
                 <GPTRegistrarPage />
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ecommerce"
+          element={
+            <ProtectedRoute currentUser={currentUser}>
+              <MainLayout currentUser={currentUser} onLogout={handleLogout}>
+                <EcommerceSuitePage />
               </MainLayout>
             </ProtectedRoute>
           }

@@ -454,6 +454,24 @@ export interface Settings {
   manual_video_url?: string;
   gpt_2925_master_email?: string;
   gpt_2925_password?: string;
+  ecommerce_api_name?: string;
+  ecommerce_api_url?: string;
+  ecommerce_api_key?: string;
+  ecommerce_model?: string;
+  ecommerce_analysis_api_name?: string;
+  ecommerce_analysis_api_url?: string;
+  ecommerce_analysis_api_key?: string;
+  ecommerce_analysis_model?: string;
+  ecommerce_generation_api_name?: string;
+  ecommerce_generation_provider?: string;
+  ecommerce_generation_api_url?: string;
+  ecommerce_generation_api_key?: string;
+  ecommerce_generation_model?: string;
+  ecommerce_video_api_name?: string;
+  ecommerce_video_provider?: string;
+  ecommerce_video_api_url?: string;
+  ecommerce_video_api_key?: string;
+  ecommerce_video_model?: string;
 }
 
 /**
@@ -663,4 +681,50 @@ export interface DownloadTaskList {
   total: number;
   page: number;
   pageSize: number;
+}
+
+/**
+ * 电商物料相关类型定义
+ */
+export interface EcommerceAnalysisResult {
+  product_name: string;
+  product_name_zh: string;
+  product_description_for_prompt: string;
+  product_type: string;
+  visual_features: string[];
+  selling_points: Array<{
+    icon: string;
+    zh: string;
+    en: string;
+    zh_desc: string;
+    en_desc: string;
+    visual_keywords: string[];
+  }>;
+  product_style: string;
+  color: string;
+  material: string;
+  style: string;
+  print_design: string;
+}
+
+export interface EcommerceGeneratedFile {
+  name: string;
+  url: string;
+  type?: string;
+  taskId?: string;
+  updatedAt?: number;
+}
+
+export interface EcommerceGenerationResult {
+  taskId: string;
+  files: EcommerceGeneratedFile[];
+}
+
+export interface EcommerceVideoResult {
+  name: string;
+  url: string;
+  duration: number;
+  prompt?: string;
+  provider?: string;
+  model?: string;
 }

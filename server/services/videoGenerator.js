@@ -502,6 +502,27 @@ function resolveVideoBenefitTypeForRequest(videoDefinition, sessionId, providerI
   return videoDefinition.benefitType || null;
 }
 
+function buildVideoCommerceInfo(benefitType) {
+  if (!benefitType) return null;
+  return {
+    benefit_type: benefitType,
+    resource_id: 'generate_video',
+    resource_id_type: 'str',
+    resource_sub_type: 'aigc',
+  };
+}
+
+function buildVideoCommerceInfoList(videoDefinition, baseBenefitType, resolution = '720p') {
+  const benefitTypes = [
+    baseBenefitType,
+    videoDefinition?.resolutionBenefitTypes?.[resolution],
+  ].filter(Boolean);
+
+  return Array.from(new Set(benefitTypes))
+    .map((benefitType) => buildVideoCommerceInfo(benefitType))
+    .filter(Boolean);
+}
+
 function supportsVideoInputMode(videoDefinition, mode) {
   const supported = Array.isArray(videoDefinition?.supportedInputMediaTypes)
     ? videoDefinition.supportedInputMediaTypes
@@ -2265,27 +2286,17 @@ export async function generateSeedanceVideo(options) {
       }
 
       if (!generateResult) {
+        const commerceInfo = buildVideoCommerceInfo(effectiveBenefitType);
+        const commerceInfoList = buildVideoCommerceInfoList(effectiveVideoDefinition, effectiveBenefitType, '720p');
         console.log(
-          `[video] 按官方草稿接口提交: functionMode=${hasReferenceFrames ? metricsExtraPayload.functionMode : 'default'}, extraVipFunctionKey=${effectiveRootModel}-720p, model=${effectiveModelId}, benefitType=${effectiveBenefitType}`
+          `[video] 按官方草稿接口提交: functionMode=${hasReferenceFrames ? metricsExtraPayload.functionMode : 'default'}, extraVipFunctionKey=${effectiveRootModel}-720p, model=${effectiveModelId}, benefitTypes=${commerceInfoList.map((item) => item.benefit_type).join(',') || effectiveBenefitType}`
         );
         const generateBody = {
           extend: {
             root_model: effectiveRootModel,
             workspace_id: 0,
-            m_video_commerce_info: {
-              benefit_type: effectiveBenefitType,
-              resource_id: 'generate_video',
-              resource_id_type: 'str',
-              resource_sub_type: 'aigc',
-            },
-            m_video_commerce_info_list: [
-              {
-                benefit_type: effectiveBenefitType,
-                resource_id: 'generate_video',
-                resource_id_type: 'str',
-                resource_sub_type: 'aigc',
-              },
-            ],
+            m_video_commerce_info: commerceInfo,
+            m_video_commerce_info_list: commerceInfoList,
           },
           submit_id: submitId,
           metrics_extra: videoTaskExtra,

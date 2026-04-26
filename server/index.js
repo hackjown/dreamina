@@ -21,7 +21,8 @@ import accountPoolService from './services/accountPoolService.js';
 import registrationService from './services/registration-service.js';
 import gptService from './services/gptService.js';
 import apiKeyService from './services/apiKeyService.js';
-import { readFileSync } from 'fs';
+import * as ecommerceService from './services/ecommerceService.js';
+import fs, { readFileSync } from 'fs';
 
 // 初始化数据库
 initDatabase();
@@ -895,6 +896,127 @@ function ensureDefaultProjectForUser(userId) {
     description: '单任务生成默认项目',
     user_id: userId,
   });
+}
+
+function getEcommerceDownloadPrompt(product, fallback = '电商物料') {
+  return [
+    product?.product_name_zh,
+    product?.product_name,
+    product?.product_description_for_prompt,
+    fallback,
+  ].find((value) => String(value || '').trim()) || fallback;
+}
+
+function createEcommerceDownloadRecord({
+  userId,
+  taskId,
+  product,
+  file,
+  video,
+  result,
+  mediaType,
+}) {
+  if (!userId || !taskId) return null;
+
+  const db = getDatabase();
+  const project = ensureDefaultProjectForUser(userId);
+  const now = new Date().toISOString();
+  const taskIdText = String(taskId);
+  const isImage = mediaType === 'image';
+  const name = String((isImage ? file?.name : video?.name) || '').trim();
+  const itemKey = `ecommerce:${taskIdText}:${isImage ? name : 'promo-video'}`;
+  const localPath = isImage && name
+    ? path.join(ecommerceService.OUTPUTS_DIR, taskIdText, name)
+    : null;
+  const videoUrl = isImage
+    ? (file?.url || null)
+    : (video?.url || result?.videoUrl || null);
+
+  const existing = db.prepare(`
+    SELECT id FROM tasks
+    WHERE user_id = ?
+      AND (
+        item_id = ?
+        OR (? IS NOT NULL AND video_path = ?)
+        OR (? IS NOT NULL AND history_id = ?)
+      )
+    LIMIT 1
+  `).get(
+    userId,
+    itemKey,
+    localPath,
+    localPath,
+    result?.historyId || null,
+    result?.historyId || null
+  );
+
+  if (existing?.id) {
+    return existing;
+  }
+
+  return taskService.createTask({
+    projectId: project.id,
+    userId,
+    prompt: isImage
+      ? `${getEcommerceDownloadPrompt(product, '电商物料图片')} - ${path.basename(name || '图片')}`
+      : (result?.prompt || video?.prompt || getEcommerceDownloadPrompt(product, '商品宣传视频')),
+    taskKind: 'output',
+    status: 'done',
+    mediaType,
+    modelId: result?.model || video?.model || (isImage ? 'ecommerce-image' : 'seedance-2.0-fast'),
+    providerId: result?.provider || video?.provider || 'ecommerce',
+    historyId: result?.historyId || null,
+    submitId: result?.submitId || null,
+    itemId: result?.itemId || itemKey,
+    videoUrl,
+    videoPath: localPath,
+    downloadStatus: localPath ? 'done' : 'pending',
+    downloadPath: localPath,
+    downloadedAt: localPath ? now : null,
+    completedAt: now,
+    accountInfo: JSON.stringify({ source: 'ecommerce', ecommerceTaskId: taskIdText }),
+  });
+}
+
+function registerEcommerceDownloadRecords({ userId, taskId, product, files = [], video = null, result = null }) {
+  const created = [];
+
+  for (const file of Array.isArray(files) ? files : []) {
+    try {
+      const record = createEcommerceDownloadRecord({
+        userId,
+        taskId,
+        product,
+        file,
+        mediaType: 'image',
+      });
+      if (record?.id) created.push(record.id);
+    } catch (error) {
+      console.warn(`[ecommerce] 注册图片下载任务失败: ${error.message}`);
+    }
+  }
+
+  if (video?.url) {
+    try {
+      const record = createEcommerceDownloadRecord({
+        userId,
+        taskId,
+        product,
+        video,
+        result,
+        mediaType: 'video',
+      });
+      if (record?.id) created.push(record.id);
+    } catch (error) {
+      console.warn(`[ecommerce] 注册视频下载任务失败: ${error.message}`);
+    }
+  }
+
+  if (created.length > 0) {
+    console.log(`[ecommerce] 已注册下载管理任务: ${created.join(', ')}`);
+  }
+
+  return created;
 }
 
 function validateBatchTasks(projectId, taskIds, userId = null, isAdmin = false) {
@@ -2867,6 +2989,7 @@ app.get('/api/settings', (req, res) => {
 app.put('/api/settings', (req, res) => {
   try {
     const settings = req.body;
+    console.log('[settings] Updating settings:', Object.keys(settings).join(', '));
     const updated = settingsService.updateSettings(settings);
     res.json({ success: true, data: updated });
   } catch (error) {
@@ -4321,6 +4444,562 @@ app.get('/api/gpt/accounts', authenticate, async (req, res) => {
 });
 
 // GPT 注册机接口已移动到上方以获得更高优先级
+
+// ============================================================
+// 电商物料分析与生成 API
+// ============================================================
+
+/**
+ * 分析商品图片
+ */
+const ecommerceGenerationTasks = new Map();
+
+function scheduleEcommerceTaskCleanup(task) {
+  if (!task || task.cleanupTimer) return;
+  task.cleanupTimer = setTimeout(() => {
+    ecommerceGenerationTasks.delete(task.taskId);
+  }, 10 * 60 * 1000);
+  task.cleanupTimer.unref?.();
+}
+
+function resolveEcommerceGenerationOptions(req) {
+  const { provider: reqProvider, apiKey: reqApiKey, baseUrl: reqBaseUrl, model: reqModel, lang, types } = req.body;
+  return {
+    provider: reqProvider
+      || settingsService.getSetting('ecommerce_generation_provider')
+      || 'openai',
+    apiKey: reqApiKey
+      || settingsService.getSetting('ecommerce_generation_api_key')
+      || settingsService.getSetting('ecommerce_api_key'),
+    baseUrl: reqBaseUrl
+      || settingsService.getSetting('ecommerce_generation_api_url')
+      || settingsService.getSetting('ecommerce_api_url'),
+    model: reqModel
+      || settingsService.getSetting('ecommerce_generation_model')
+      || settingsService.getSetting('ecommerce_model'),
+    lang,
+    types,
+    userId: req.user?.id,
+  };
+}
+
+const ecommerceVideoTasks = new Map();
+
+function scheduleEcommerceVideoTaskCleanup(task) {
+  if (!task || task.cleanupTimer) return;
+  task.cleanupTimer = setTimeout(() => {
+    ecommerceVideoTasks.delete(task.taskId);
+  }, 10 * 60 * 1000);
+  task.cleanupTimer.unref?.();
+}
+
+function resolveEcommerceVideoOptions(req) {
+  const { provider: reqProvider, apiKey: reqApiKey, baseUrl: reqBaseUrl, model: reqModel, lang, duration, ratio } = req.body;
+  return {
+    provider: reqProvider
+      || settingsService.getSetting('ecommerce_video_provider')
+      || 'dreamina',
+    apiKey: reqApiKey
+      || settingsService.getSetting('ecommerce_video_api_key')
+      || settingsService.getSetting('ecommerce_generation_api_key')
+      || settingsService.getSetting('ecommerce_api_key'),
+    baseUrl: reqBaseUrl
+      || settingsService.getSetting('ecommerce_video_api_url')
+      || '',
+    model: reqModel
+      || settingsService.getSetting('ecommerce_video_model')
+      || 'seedance-2.0-fast',
+    lang,
+    duration,
+    ratio: ratio || '16:9',
+    userId: req.user?.id,
+  };
+}
+
+function resolveEcommerceReferenceImagePath(referenceImage) {
+  const rawUrl = typeof referenceImage === 'string'
+    ? referenceImage
+    : (referenceImage?.url || '');
+  if (!rawUrl) return { filePath: null };
+
+  let pathname = String(rawUrl).trim();
+  try {
+    if (/^https?:\/\//i.test(pathname)) {
+      pathname = new URL(pathname).pathname;
+    }
+  } catch {
+    return { error: '视频首帧图片地址无效' };
+  }
+
+  const match = pathname.match(/^\/api\/ecommerce\/output\/([^/]+)\/(.+)$/);
+  if (!match) {
+    return { error: '视频首帧必须来自已生成的电商物料图片' };
+  }
+
+  const taskId = decodeURIComponent(match[1]);
+  const fileName = decodeURIComponent(match[2]);
+  const ext = path.extname(fileName).toLowerCase();
+  if (!['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
+    return { error: '视频首帧必须是图片文件' };
+  }
+
+  const outputDir = path.resolve(ecommerceService.OUTPUTS_DIR, taskId);
+  const filePath = path.resolve(outputDir, fileName);
+  if (!filePath.startsWith(`${outputDir}${path.sep}`)) {
+    return { error: '视频首帧图片路径无效' };
+  }
+  if (!fs.existsSync(filePath)) {
+    return { error: '视频首帧图片不存在' };
+  }
+
+  return { filePath };
+}
+
+app.post('/api/ecommerce/analyze', authenticate, upload.array('images'), async (req, res) => {
+  try {
+    const files = req.files;
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: '请上传商品图片' });
+    }
+
+    // Save files to temporary location
+    const imagePaths = [];
+    for (const file of files) {
+      const ext = path.extname(file.originalname) || '.jpg';
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}${ext}`;
+      const filePath = path.join(ecommerceService.UPLOADS_DIR, fileName);
+      fs.writeFileSync(filePath, file.buffer);
+      imagePaths.push(filePath);
+    }
+
+    const { lang = 'zh', provider: reqProvider, apiKey: reqApiKey, baseUrl: reqBaseUrl, model: reqModel } = req.body;
+    
+    const provider = reqProvider || 'openai';
+    const apiKey = reqApiKey
+      || settingsService.getSetting('ecommerce_analysis_api_key')
+      || settingsService.getSetting('ecommerce_api_key');
+    const baseUrl = reqBaseUrl
+      || settingsService.getSetting('ecommerce_analysis_api_url')
+      || settingsService.getSetting('ecommerce_api_url');
+    const model = reqModel
+      || settingsService.getSetting('ecommerce_analysis_model')
+      || settingsService.getSetting('ecommerce_model');
+
+    const result = await ecommerceService.analyzeProduct(imagePaths, { lang, provider, apiKey, baseUrl, model });
+    result.__source_images = imagePaths;
+    
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('[ecommerce] Analyze API failed:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * 生成物料图
+ */
+app.post('/api/ecommerce/generate', authenticate, async (req, res) => {
+  try {
+    const { product } = req.body;
+    if (!product) {
+      return res.status(400).json({ error: '缺少商品分析数据' });
+    }
+
+    const result = await ecommerceService.generateImages(product, resolveEcommerceGenerationOptions(req));
+    
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('[ecommerce] Generate API failed:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/ecommerce/generate-task', authenticate, async (req, res) => {
+  try {
+    const { product } = req.body;
+    if (!product) {
+      return res.status(400).json({ error: '缺少商品分析数据' });
+    }
+
+    const taskId = Date.now().toString();
+    const task = {
+      taskId,
+      userId: req.user?.id,
+      status: 'processing',
+      progress: '正在准备高保真物料生成...',
+      current: 0,
+      total: 0,
+      files: [],
+      failures: [],
+      result: null,
+      error: null,
+      startTime: Date.now(),
+      cleanupTimer: null,
+    };
+    ecommerceGenerationTasks.set(taskId, task);
+
+    ecommerceService.generateImagesHighFidelity(product, {
+      ...resolveEcommerceGenerationOptions(req),
+      taskId,
+    }, {
+      onProgress: (progress) => {
+        task.progress = progress.message || task.progress;
+        task.current = progress.current || task.current;
+        task.total = progress.total || task.total;
+        task.currentType = progress.type;
+        task.currentName = progress.name;
+      },
+      onFile: (update) => {
+        task.files = update.files || task.files;
+        task.failures = update.failures || task.failures;
+        task.current = update.current || task.current;
+        task.total = update.total || task.total;
+        task.progress = `已完成第 ${task.current}/${task.total} 张：${update.name}`;
+      },
+    }).then((result) => {
+      task.status = 'done';
+      task.progress = '全套电商物料生成完成';
+      task.result = result;
+      task.files = result.files || task.files;
+      task.failures = result.failures || task.failures;
+      registerEcommerceDownloadRecords({
+        userId: task.userId,
+        taskId,
+        product,
+        files: task.files,
+      });
+      if (task.failures?.length) {
+        const failedNames = task.failures
+          .map((item) => ecommerceService.TYPE_NAMES_ZH?.[item.type] || item.type)
+          .filter(Boolean)
+          .join('、');
+        task.progress = `已生成 ${task.files.length} 张图片，${task.failures.length} 张失败${failedNames ? `：${failedNames}` : ''}`;
+      }
+    }).catch((error) => {
+      task.status = 'error';
+      task.error = error.message || '生成失败';
+      task.progress = '';
+      console.error('[ecommerce] Generate task failed:', error);
+    });
+
+    res.json({ success: true, data: { taskId } });
+  } catch (error) {
+    console.error('[ecommerce] Generate task API failed:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/ecommerce/generate-task/:taskId', authenticate, (req, res) => {
+  const task = ecommerceGenerationTasks.get(req.params.taskId);
+  if (!task || (task.userId && task.userId !== req.user?.id && req.user?.role !== 'admin')) {
+    return res.status(404).json({ error: '任务不存在' });
+  }
+
+  const elapsed = Math.floor((Date.now() - task.startTime) / 1000);
+  const data = {
+    taskId: task.taskId,
+    status: task.status,
+    elapsed,
+    progress: task.progress,
+    current: task.current,
+    total: task.total,
+    files: task.files,
+    failures: task.failures,
+    result: task.result,
+    error: task.error,
+  };
+
+  if (task.status === 'done' || task.status === 'error') {
+    scheduleEcommerceTaskCleanup(task);
+  }
+
+  res.json({ success: true, data });
+});
+
+app.post('/api/ecommerce/regenerate-image', authenticate, async (req, res) => {
+  try {
+    const { taskId, type, fileName, product } = req.body || {};
+    const resolvedType = String(type || '').trim()
+      || Object.entries(ecommerceService.TYPE_NAMES_ZH)
+        .find(([, zhName]) => String(fileName || '').includes(zhName))?.[0]
+      || '';
+
+    if (!taskId) {
+      return res.status(400).json({ error: '缺少电商物料任务 ID' });
+    }
+    if (!resolvedType) {
+      return res.status(400).json({ error: '缺少要重新生成的图片类型' });
+    }
+
+    const result = await ecommerceService.regenerateImageForTask(
+      taskId,
+      resolvedType,
+      product,
+      {
+        ...resolveEcommerceGenerationOptions(req),
+        types: resolvedType,
+        taskId,
+      }
+    );
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('[ecommerce] Regenerate image failed:', error);
+    res.status(500).json({ error: error.message || '重新生成失败' });
+  }
+});
+
+app.post('/api/ecommerce/video-task', authenticate, async (req, res) => {
+  try {
+    const { product, referenceImage } = req.body;
+    if (!product) {
+      return res.status(400).json({ error: '缺少商品分析数据' });
+    }
+
+    const referenceImageResult = resolveEcommerceReferenceImagePath(referenceImage);
+    if (referenceImageResult.error) {
+      return res.status(400).json({ error: referenceImageResult.error });
+    }
+    const videoProduct = referenceImageResult.filePath
+      ? {
+          ...product,
+          __source_images: [referenceImageResult.filePath],
+          source_image_paths: [referenceImageResult.filePath],
+          sourceImages: [referenceImageResult.filePath],
+        }
+      : product;
+    if (referenceImageResult.filePath) {
+      console.log(`[ecommerce] 使用生成物料作为视频首帧: ${referenceImageResult.filePath}`);
+    }
+
+    const taskId = Date.now().toString();
+    const task = {
+      taskId,
+      userId: req.user?.id,
+      status: 'processing',
+      progress: '正在准备商品宣传视频...',
+      result: null,
+      video: null,
+      error: null,
+      startTime: Date.now(),
+      cleanupTimer: null,
+    };
+    ecommerceVideoTasks.set(taskId, task);
+
+    ecommerceService.generatePromoVideo(videoProduct, {
+      ...resolveEcommerceVideoOptions(req),
+      taskId,
+    }, {
+      onProgress: (progress) => {
+        task.progress = progress || task.progress;
+      },
+    }).then((result) => {
+      task.status = 'done';
+      task.progress = '商品宣传视频生成完成';
+      task.result = result;
+      task.video = result.video;
+      registerEcommerceDownloadRecords({
+        userId: task.userId,
+        taskId,
+        product: videoProduct,
+        video: task.video,
+        result,
+      });
+    }).catch((error) => {
+      task.status = 'error';
+      task.error = error.message || '视频生成失败';
+      task.progress = '';
+      console.error('[ecommerce] Video task failed:', error);
+    });
+
+    res.json({ success: true, data: { taskId } });
+  } catch (error) {
+    console.error('[ecommerce] Video task API failed:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/ecommerce/video-task/:taskId', authenticate, (req, res) => {
+  const task = ecommerceVideoTasks.get(req.params.taskId);
+  if (!task || (task.userId && task.userId !== req.user?.id && req.user?.role !== 'admin')) {
+    return res.status(404).json({ error: '任务不存在' });
+  }
+
+  const elapsed = Math.floor((Date.now() - task.startTime) / 1000);
+  const data = {
+    taskId: task.taskId,
+    status: task.status,
+    elapsed,
+    progress: task.progress,
+    video: task.video,
+    result: task.result,
+    error: task.error,
+  };
+
+  if (task.status === 'done' || task.status === 'error') {
+    scheduleEcommerceVideoTaskCleanup(task);
+  }
+
+  res.json({ success: true, data });
+});
+
+app.post('/api/ecommerce/test-connection', authenticate, async (req, res) => {
+  try {
+    const { provider: reqProvider, apiKey: reqApiKey, baseUrl: reqBaseUrl, model: reqModel } = req.body;
+    
+    const provider = String(reqProvider || 'openai').trim();
+    const apiKey = String(reqApiKey || settingsService.getSetting('ecommerce_api_key')).trim();
+    const baseUrl = String(reqBaseUrl || settingsService.getSetting('ecommerce_api_url')).trim();
+    const model = String(reqModel || settingsService.getSetting('ecommerce_model')).trim();
+
+    if (!apiKey) {
+      return res.status(400).json({ error: '未配置 API Key' });
+    }
+
+    // Use native fetch (Node 18+)
+    const url = `${baseUrl.replace(/\/$/, '')}/chat/completions`;
+    console.log(`[ecommerce] Testing connection to: ${url} (model: ${model || 'gpt-4o'})`);
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: model || 'gpt-4o',
+        messages: [{ role: 'user', content: 'say hi' }],
+        max_tokens: 5,
+        stream: false
+      })
+    });
+
+    console.log(`[ecommerce] Response status: ${response.status} ${response.statusText}`);
+    const contentType = response.headers.get('content-type');
+    console.log(`[ecommerce] Content-Type: ${contentType}`);
+    if (response.ok) {
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        res.json({ success: true, message: '连接成功', model: data.model || model || 'unknown' });
+      } else {
+        const text = await response.text();
+        res.status(500).json({ 
+          success: false, 
+          error: `API 返回了非 JSON 响应。请检查 Base URL 是否正确。响应内容: ${text.substring(0, 100)}...` 
+        });
+      }
+    } else {
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      if (contentType && contentType.includes('application/json')) {
+        const errorData = await response.json().catch(() => ({}));
+        errorMessage = errorData.error?.message || errorMessage;
+      } else {
+        const text = await response.text();
+        if (text.includes('<!DOCTYPE html>') || text.includes('<html')) {
+          errorMessage = `接口地址错误 (404/Redirect)。请确保 Base URL 包含 /v1 路径（如适用）。状态码: ${response.status}`;
+        } else {
+          errorMessage = text.substring(0, 100) || errorMessage;
+        }
+      }
+      res.status(response.status).json({ success: false, error: errorMessage });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/ecommerce/models', authenticate, async (req, res) => {
+  try {
+    const apiKey = String(req.body.apiKey || settingsService.getSetting('ecommerce_api_key')).trim();
+    const baseUrl = String(req.body.baseUrl || settingsService.getSetting('ecommerce_api_url')).trim();
+
+    if (!apiKey || !baseUrl) {
+      return res.status(400).json({ error: '请先配置 API Key 和 Base URL' });
+    }
+
+    // Use native fetch (Node 18+)
+    const url = `${baseUrl.replace(/\/$/, '')}/models`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      }
+    });
+
+    const contentType = response.headers.get('content-type');
+    if (response.ok) {
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        res.json({ success: true, models: data.data || [] });
+      } else {
+        res.status(500).json({ error: 'API 返回了非 JSON 响应。' });
+      }
+    } else {
+      let errorMsg = `无法获取模型列表 (HTTP ${response.status})`;
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json().catch(() => ({}));
+        if (data.detail) errorMsg += `: ${data.detail}`;
+        else if (data.error?.message) errorMsg += `: ${data.error.message}`;
+      }
+      res.status(response.status).json({ error: errorMsg });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * 获取电商物料历史记录
+ */
+app.get('/api/ecommerce/history', authenticate, async (req, res) => {
+  try {
+    const history = await ecommerceService.getHistory();
+    res.json({ success: true, data: history });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/ecommerce/history/:taskId', authenticate, async (req, res) => {
+  try {
+    const deleted = ecommerceService.deleteHistoryItem(req.params.taskId);
+    res.json({ success: true, deleted });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * 获取生成的图片文件
+ */
+app.get('/api/ecommerce/output/:taskId/:fileName', (req, res) => {
+  const { taskId, fileName } = req.params;
+  const filePath = path.join(ecommerceService.OUTPUTS_DIR, taskId, fileName);
+  
+  if (fs.existsSync(filePath)) {
+    res.sendFile(filePath);
+  } else {
+    res.status(404).json({ error: '文件不存在' });
+  }
+});
+
+app.get('/api/ecommerce/upload/:fileName', (req, res) => {
+  const safeFileName = path.basename(String(req.params.fileName || ''));
+  const filePath = path.join(ecommerceService.UPLOADS_DIR, safeFileName);
+  const resolvedFile = path.resolve(filePath);
+  const resolvedUploadsDir = path.resolve(ecommerceService.UPLOADS_DIR);
+
+  if (!resolvedFile.startsWith(`${resolvedUploadsDir}${path.sep}`)) {
+    return res.status(400).json({ error: '无效的文件路径' });
+  }
+
+  if (fs.existsSync(resolvedFile)) {
+    res.sendFile(resolvedFile);
+  } else {
+    res.status(404).json({ error: '文件不存在' });
+  }
+});
 
 const recoveredInterruptedTaskIds = recoverInterruptedGeneratingTasks({ isAdmin: true });
 

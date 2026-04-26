@@ -33,6 +33,7 @@ export async function getSettings(): Promise<Settings> {
 export async function updateSettings(
   settings: Record<string, string>
 ): Promise<Settings> {
+  console.log('[settings-service] Updating settings with keys:', Object.keys(settings).join(', '));
   const response = await fetch(`${API_BASE}/settings`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

@@ -40,6 +40,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     dumb-init \
+    python3 \
+    python3-pip \
     fonts-liberation \
     libasound2 \
     libatk-bridge2.0-0 \
@@ -72,7 +74,10 @@ COPY server/package.json ./server/package.json
 COPY server/index.js server/browser-service.js ./server/
 COPY server/database ./server/database
 COPY server/services ./server/services
+COPY server/ecommerce-image-suite ./server/ecommerce-image-suite
 COPY --from=frontend-build /app/dist ./dist
+
+RUN pip3 install --break-system-packages --no-cache-dir openai requests urllib3 httpx
 
 RUN mkdir -p /app/server/data /app/logs \
     && cd /app/server \

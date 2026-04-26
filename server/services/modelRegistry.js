@@ -21,6 +21,9 @@ const VIDEO_MODEL_REGISTRY = {
     nativeModelId: 'dreamina_seedance_40',
     benefitType: 'dreamina_seedance_20_fast',
     internationalBenefitType: 'dreamina_seedance_20_fast',
+    resolutionBenefitTypes: {
+      '720p': 'seedance_20_fast_720p_output',
+    },
     draftVersion: '3.3.12',
     supportsInternational: true,
     zeroCreditProbeEligible: true,

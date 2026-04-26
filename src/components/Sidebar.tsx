@@ -69,10 +69,11 @@ export default function Sidebar({ currentUser, onLogout }: SidebarProps) {
       icon: UsersIcon,
     },
     {
-      id: 'SETTINGS',
-      label: '设置',
-      path: '/settings',
-      icon: SettingsIcon,
+      id: 'ECOMMERCE_SUITE',
+      label: '电商物料',
+      path: '/ecommerce',
+      icon: PackageIcon,
+      accent: 'text-emerald-400',
     },
     {
       id: 'GPT_REGISTRAR',
@@ -80,6 +81,12 @@ export default function Sidebar({ currentUser, onLogout }: SidebarProps) {
       path: '/gpt-registrar',
       icon: SparkleIcon,
       accent: 'text-indigo-400',
+    },
+    {
+      id: 'SETTINGS',
+      label: '系统设置',
+      path: '/settings',
+      icon: SettingsIcon,
     },
     {
       id: 'ADMIN',
@@ -103,145 +110,126 @@ export default function Sidebar({ currentUser, onLogout }: SidebarProps) {
 
   return (
     <>
-      {/* 移动端遮罩 */}
+      {/* Mobile Toggle */}
+      <div className="lg:hidden fixed left-4 z-50 top-[calc(env(safe-area-inset-top)+1rem)]">
+        <button
+          onClick={() => setMobileOpen(!mobileOpen)}
+          className="p-2 bg-[#1c1f2e] text-white rounded-lg border border-gray-800 shadow-xl"
+        >
+          {mobileOpen ? (
+            <CloseIcon className="w-6 h-6" />
+          ) : (
+            <MenuIcon className="w-6 h-6" />
+          )}
+        </button>
+      </div>
+
+      {/* Sidebar Overlay */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
           onClick={() => setMobileOpen(false)}
         />
       )}
 
-      {/* 侧边栏 */}
+      {/* Sidebar Container */}
       <aside
-        className={`fixed top-0 left-0 z-50 h-screen bg-[#1c1f2e] border-r border-gray-800 transition-all duration-300 ${
-          expanded ? 'w-60' : 'w-16'
-        } ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}
+        className={`z-40 bg-[#0f111a] border-r border-gray-800 transition-all duration-300 h-full flex-shrink-0 ${
+          expanded ? 'w-64' : 'w-20'
+        } ${
+          mobileOpen
+            ? 'fixed inset-y-0 left-0 translate-x-0'
+            : 'relative hidden lg:block -translate-x-full lg:translate-x-0'
+        }`}
       >
-        {/* Logo 区域 */}
-        <div className="h-16 flex items-center justify-between px-4 border-b border-gray-800">
-          <div className={`flex items-center gap-3 ${!expanded && 'justify-center'}`}>
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
-              <SparkleIcon className="w-5 h-5 text-white" />
-            </div>
-            {expanded && (
-              <span className="text-lg font-bold text-white whitespace-nowrap">
-                Seedance 2.0
-              </span>
-            )}
+        <div className="h-full flex flex-col">
+          {/* Logo Section */}
+          <div className="p-6 border-b border-gray-800 flex items-center justify-between">
+            <Link to="/" className="flex items-center gap-3 overflow-hidden">
+              <div className="min-w-[32px] w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-purple-900/40">
+                <FilmIcon className="w-5 h-5 text-white" />
+              </div>
+              {expanded && (
+                <span className="text-xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent whitespace-nowrap">
+                  Seedance 2.0
+                </span>
+              )}
+            </Link>
           </div>
-          {expanded && (
-            <button
-              onClick={() => setMobileOpen(false)}
-              className="lg:hidden text-gray-400 hover:text-white"
-            >
-              <CloseIcon className="w-5 h-5" />
-            </button>
-          )}
-        </div>
 
-        {/* 菜单项 */}
-        <nav className="p-3 space-y-1">
-          {visibleItems.map((item) => {
-            const Icon = item.icon;
-            const active = isActive(item.path);
-
-            return (
+          {/* Navigation */}
+          <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-2 custom-scrollbar">
+            {visibleItems.map((item) => (
               <Link
                 key={item.id}
                 to={item.path}
                 onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
-                  active
-                    ? 'bg-purple-500/20 text-purple-400'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                } ${!expanded && 'justify-center'}`}
+                className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-200 group relative ${
+                  isActive(item.path)
+                    ? 'bg-purple-600/10 text-white border border-purple-500/20'
+                    : 'text-gray-400 hover:bg-gray-800/50 hover:text-white'
+                }`}
               >
-                <Icon className={`w-5 h-5 flex-shrink-0 ${item.accent || ''}`} />
+                <item.icon
+                  className={`w-5 h-5 transition-transform group-hover:scale-110 ${
+                    isActive(item.path) ? (item.accent || 'text-purple-400') : ''
+                  }`}
+                />
                 {expanded && (
-                  <span className={`text-sm font-medium ${item.accent || ''}`}>
+                  <span className="font-medium text-sm whitespace-nowrap">
                     {item.label}
                   </span>
                 )}
+                {!expanded && (
+                  <div className="absolute left-full ml-4 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-xl border border-gray-800">
+                    {item.label}
+                  </div>
+                )}
               </Link>
-            );
-          })}
-        </nav>
+            ))}
+          </nav>
 
-        {/* 底部用户信息 */}
-        <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-gray-800">
-          {expanded ? (
-            <div className="flex items-center gap-3">
-              <div className="flex min-w-0 flex-1 items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
-                  <UserIcon className="w-5 h-5 text-white" />
+          {/* Bottom Section */}
+          <div className="p-4 border-t border-gray-800 space-y-2">
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-800/50 hover:text-white rounded-xl transition-all group"
+            >
+              <div className={`w-5 h-5 transition-transform duration-300 ${!expanded ? 'rotate-180' : ''}`}>
+                <MenuIcon className="w-5 h-5" />
+              </div>
+              {expanded && <span className="text-sm font-medium">收起侧边栏</span>}
+            </button>
+
+            <div className="pt-2">
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 p-3 text-red-400 hover:bg-red-400/10 rounded-xl transition-all group"
+              >
+                <LogoutIcon className="w-5 h-5 transition-transform group-hover:scale-110" />
+                {expanded && <span className="text-sm font-medium">退出登录</span>}
+              </button>
+            </div>
+
+            {/* Profile Bar */}
+            {expanded && currentUser && (
+              <div className="mt-4 p-3 rounded-xl bg-gray-800/30 border border-gray-700 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-xs font-bold text-white shadow-inner">
+                  <UserIcon className="w-4 h-4" />
                 </div>
-                <div className="min-w-0 flex-1 overflow-hidden">
-                  <p className="text-sm font-medium text-white truncate">
-                    {currentUser?.username || currentUser?.email || '用户'}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-white truncate">
+                    {currentUser.username || '未登录'}
                   </p>
-                  <p className="text-xs text-gray-500 truncate">
-                    {currentUser?.username && currentUser?.email && !currentUser?.email.endsWith('@local.seedance.invalid')
-                      ? currentUser?.email
-                      : currentUser?.role === 'admin'
-                        ? '管理员'
-                        : '普通用户'}
+                  <p className="text-[10px] text-emerald-400 font-mono">
+                    {currentUser.credits} Credits
                   </p>
                 </div>
               </div>
-              <button
-                onClick={handleLogout}
-                className="flex-shrink-0 p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
-                title="退出登录"
-              >
-                <LogoutIcon className="w-5 h-5" />
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-2">
-              <button
-                onClick={handleLogout}
-                className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
-                title="退出登录"
-              >
-                <LogoutIcon className="w-5 h-5" />
-              </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </aside>
-
-      {/* 顶部导航栏（移动端） */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-[#1c1f2e] border-b border-gray-800 z-30 flex items-center justify-between px-4">
-        <button
-          onClick={() => setMobileOpen(true)}
-          className="p-2 text-gray-400 hover:text-white"
-        >
-          <MenuIcon className="w-6 h-6" />
-        </button>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-            <SparkleIcon className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-lg font-bold text-white">Seedance 2.0</span>
-        </div>
-        <div className="w-10" /> {/* 占位 */}
-      </header>
-
-      {/* 展开/收起按钮（桌面端） */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="hidden lg:flex fixed top-1/2 -right-3 z-50 w-6 h-12 bg-[#1c1f2e] border border-gray-800 rounded-r-lg items-center justify-center text-gray-400 hover:text-white transition-all"
-      >
-        {expanded ? (
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        ) : (
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-        )}
-      </button>
     </>
   );
 }

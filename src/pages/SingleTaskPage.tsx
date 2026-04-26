@@ -144,7 +144,7 @@ export default function SingleTaskPage() {
   const canGenerate = (prompt.trim() || images.length > 0) && !isGenerating;
 
   return (
-    <div className="h-screen flex flex-col md:flex-row overflow-hidden bg-[#0f111a] text-white">
+    <div className="h-full flex flex-col md:flex-row overflow-hidden bg-[#0f111a] text-white">
       {/* Mobile Header */}
       <div className="md:hidden sticky top-0 z-40 bg-[#0f111a]/95 backdrop-blur-sm px-4 py-3 flex items-center justify-between border-b border-gray-800">
         <h1 className="text-lg font-bold">{selectedModelOption?.label || (isImageMode ? '图片生成' : '视频生成')}</h1>
