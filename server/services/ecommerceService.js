@@ -523,11 +523,11 @@ async function postProcessMultiSceneText(imagePath, productJson) {
   <rect x="0" y="0" width="${width}" height="${topBandHeight}" fill="#f7f7f4"/>
   <rect x="0" y="${bottomBandTop}" width="${width}" height="${height - bottomBandTop}" fill="#f7f7f4"/>
   <text x="${Math.round(width / 2)}" y="${titleY}" text-anchor="middle"
-    font-family="PingFang SC, Hiragino Sans GB, STHeiti, Noto Sans CJK SC, sans-serif"
+    font-family="Noto Sans CJK SC, Noto Sans CJK, Source Han Sans SC, PingFang SC, Hiragino Sans GB, STHeiti, sans-serif"
     font-size="${titleSize}" font-weight="700" fill="#1f2329">${escapeSvgText(title)}</text>
   ${labels.map((label, index) => `
   <text x="${labelXs[index]}" y="${labelY}" text-anchor="middle"
-    font-family="PingFang SC, Hiragino Sans GB, STHeiti, Noto Sans CJK SC, sans-serif"
+    font-family="Noto Sans CJK SC, Noto Sans CJK, Source Han Sans SC, PingFang SC, Hiragino Sans GB, STHeiti, sans-serif"
     font-size="${labelSize}" font-weight="600" fill="#1f2329">${escapeSvgText(label)}</text>`).join('')}
 </svg>`;
 

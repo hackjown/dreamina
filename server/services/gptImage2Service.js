@@ -65,6 +65,7 @@ function normalizePromptItem(item, index, custom = false) {
   const text = item.text || '';
   const textZh = item.textZh || text;
   const textEn = item.textEn || text;
+  const deleted = Boolean(item.deleted);
   return {
     id: item.id || `prompt-${index + 1}`,
     index: index + 1,
@@ -82,10 +83,19 @@ function normalizePromptItem(item, index, custom = false) {
     viewCount: Number(item.viewCount || 0),
     media: Array.isArray(item.media) ? item.media.slice(0, 4) : [],
     custom,
+    deleted,
+    sourcePromptId: item.sourcePromptId || '',
     createdAt: item.createdAt || '',
+    updatedAt: item.updatedAt || '',
     sourceRepo: item.sourceRepo || '',
     title: item.title || '',
   };
+}
+
+function readBasePrompts() {
+  const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+  const parsed = JSON.parse(raw);
+  return Array.isArray(parsed) ? parsed : [];
 }
 
 function readCustomPrompts() {
@@ -114,10 +124,53 @@ function savePromptMediaFiles(files = []) {
   });
 }
 
+function normalizeMediaList(media = []) {
+  return Array.isArray(media)
+    ? media
+        .filter((item) => item?.url)
+        .slice(0, 4)
+        .map((item) => ({
+          type: item.type || 'photo',
+          url: item.url,
+          ...(item.width ? { width: item.width } : {}),
+          ...(item.height ? { height: item.height } : {}),
+        }))
+    : [];
+}
+
 export function listPromptLibrary() {
-  const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-  const baseItems = JSON.parse(raw).map((item, index) => normalizePromptItem(item, index, false));
-  const customItems = readCustomPrompts().map((item, index) => normalizePromptItem(item, baseItems.length + index, true));
+  const baseRawItems = readBasePrompts();
+  const customRawItems = readCustomPrompts();
+  const overridesBySourceId = new Map();
+  const standaloneCustomItems = [];
+
+  for (const item of customRawItems) {
+    if (item?.deleted && item?.sourcePromptId) {
+      overridesBySourceId.set(String(item.sourcePromptId), item);
+      continue;
+    }
+    if (item?.sourcePromptId) {
+      overridesBySourceId.set(String(item.sourcePromptId), item);
+    } else {
+      standaloneCustomItems.push(item);
+    }
+  }
+
+  const baseItems = baseRawItems.map((item, index) => {
+    const override = overridesBySourceId.get(String(item.id || `prompt-${index + 1}`));
+    if (override?.deleted) return null;
+    if (!override) return normalizePromptItem(item, index, false);
+    return normalizePromptItem({
+      ...item,
+      ...override,
+      id: item.id || `prompt-${index + 1}`,
+      sourcePromptId: item.id || `prompt-${index + 1}`,
+      media: normalizeMediaList(override.media || item.media),
+    }, index, true);
+  }).filter(Boolean);
+  const customItems = standaloneCustomItems
+    .filter((item) => !item?.deleted)
+    .map((item, index) => normalizePromptItem(item, baseItems.length + index, true));
   return [...customItems, ...baseItems];
 }
 
@@ -205,12 +258,7 @@ export async function addCustomPrompt({ text, author = '自定义', lang = 'zh',
   if (!textEn) textEn = cleanText;
 
   const savedMedia = savePromptMediaFiles(files);
-  const urlMedia = Array.isArray(media)
-    ? media
-        .filter((item) => item?.url)
-        .slice(0, 4 - savedMedia.length)
-        .map((item) => ({ type: item.type || 'photo', url: item.url }))
-    : [];
+  const urlMedia = normalizeMediaList(media).slice(0, 4 - savedMedia.length);
 
   const item = {
     id: `custom-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -229,6 +277,148 @@ export async function addCustomPrompt({ text, author = '自定义', lang = 'zh',
   items.unshift(item);
   writeCustomPrompts(items);
   return normalizePromptItem(item, 0, true);
+}
+
+function findPromptSource(id) {
+  const promptId = String(id || '').trim();
+  if (!promptId) return null;
+
+  const customItems = readCustomPrompts();
+  const customIndex = customItems.findIndex((item) => item.id === promptId || item.sourcePromptId === promptId);
+  if (customIndex >= 0) {
+    return { kind: 'custom', item: customItems[customIndex], index: customIndex, customItems };
+  }
+
+  const baseItems = readBasePrompts();
+  const baseIndex = baseItems.findIndex((item, index) => (item.id || `prompt-${index + 1}`) === promptId);
+  if (baseIndex >= 0) {
+    return { kind: 'base', item: baseItems[baseIndex], index: baseIndex, customItems };
+  }
+
+  return null;
+}
+
+export async function updatePrompt({ id, text, author = '', lang = 'zh', files = [], media = [], translationConfig = null }) {
+  const source = findPromptSource(id);
+  if (!source) throw new Error('未找到要修改的提示词');
+
+  const cleanText = String(text || '').trim();
+  if (!cleanText) throw new Error('提示词不能为空');
+  if (cleanText.length > 12000) throw new Error('提示词过长，请控制在 12000 字以内');
+
+  const promptLang = lang === 'en' || lang === 'zh' ? lang : detectPromptLang(cleanText);
+  const original = source.item || {};
+  let textZh = promptLang === 'zh' ? cleanText : (original.textZh || '');
+  let textEn = promptLang === 'en' ? cleanText : (original.textEn || '');
+  if (translationConfig) {
+    try {
+      if (promptLang === 'zh') textEn = await translatePromptText({ text: cleanText, targetLang: 'en', config: translationConfig });
+      if (promptLang === 'en') textZh = await translatePromptText({ text: cleanText, targetLang: 'zh', config: translationConfig });
+    } catch (error) {
+      console.warn('[gpt-image2] 更新提示词翻译失败，保留已有翻译:', error.message);
+    }
+  }
+  if (!textZh) textZh = cleanText;
+  if (!textEn) textEn = cleanText;
+
+  const savedMedia = savePromptMediaFiles(files);
+  const nextMedia = [...normalizeMediaList(media), ...savedMedia].slice(0, 4);
+  const now = new Date().toISOString();
+  const customItems = source.customItems || readCustomPrompts();
+  const baseId = source.kind === 'base'
+    ? (source.item.id || `prompt-${source.index + 1}`)
+    : (source.item.sourcePromptId || '');
+  const storedId = source.kind === 'base'
+    ? `override-${baseId}`
+    : source.item.id;
+  const updatedItem = {
+    ...original,
+    id: storedId,
+    ...(baseId ? { sourcePromptId: baseId } : {}),
+    author: String(author || original.author || '自定义').trim() || '自定义',
+    lang: promptLang,
+    originalLang: original.originalLang || promptLang,
+    text: cleanText,
+    textZh,
+    textEn,
+    media: nextMedia.length ? nextMedia : normalizeMediaList(original.media),
+    updatedAt: now,
+    createdAt: original.createdAt || now,
+  };
+
+  if (source.kind === 'custom') {
+    customItems[source.index] = updatedItem;
+  } else {
+    const overrideIndex = customItems.findIndex((item) => item.sourcePromptId === baseId);
+    if (overrideIndex >= 0) customItems[overrideIndex] = updatedItem;
+    else customItems.unshift(updatedItem);
+  }
+  writeCustomPrompts(customItems);
+
+  const normalizedId = baseId || updatedItem.id;
+  return listPromptLibrary().find((item) => item.id === normalizedId) || normalizePromptItem(updatedItem, 0, true);
+}
+
+export function deletePrompt(id) {
+  const source = findPromptSource(id);
+  if (!source) throw new Error('未找到要删除的提示词');
+
+  const customItems = source.customItems || readCustomPrompts();
+  if (source.kind === 'custom') {
+    customItems.splice(source.index, 1);
+  } else {
+    const baseId = source.item.id || `prompt-${source.index + 1}`;
+    const overrideIndex = customItems.findIndex((item) => item.sourcePromptId === baseId);
+    const tombstone = {
+      id: `deleted-${baseId}`,
+      sourcePromptId: baseId,
+      deleted: true,
+      updatedAt: new Date().toISOString(),
+    };
+    if (overrideIndex >= 0) customItems[overrideIndex] = tombstone;
+    else customItems.unshift(tombstone);
+  }
+  writeCustomPrompts(customItems);
+  return { id: String(id || '').trim(), deleted: true };
+}
+
+export async function fetchPromptMediaForDownload(rawUrl) {
+  const url = String(rawUrl || '').trim();
+  if (!url) throw new Error('缺少示例图片地址');
+
+  if (url.startsWith('/api/gpt-image2/prompt-media/')) {
+    const fileName = decodeURIComponent(url.split('/').pop() || '');
+    const filePath = resolvePromptMediaPath(fileName);
+    if (!filePath) throw new Error('示例图片不存在');
+    const ext = path.extname(filePath).replace('.', '').toLowerCase();
+    return {
+      buffer: fs.readFileSync(filePath),
+      mime: ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : 'image/png',
+      fileName: path.basename(filePath),
+    };
+  }
+
+  const parsed = new URL(url);
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('不支持的示例图片地址');
+  }
+  const response = await fetch(parsed.toString(), {
+    headers: {
+      'User-Agent': 'Mozilla/5.0',
+      Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`下载示例图片失败：${response.status}`);
+  }
+  const mime = response.headers.get('content-type') || 'image/jpeg';
+  const arrayBuffer = await response.arrayBuffer();
+  const ext = mimeToExt(mime) || inferExtFromUrl(parsed.toString());
+  return {
+    buffer: Buffer.from(arrayBuffer),
+    mime,
+    fileName: createPromptMediaName(path.basename(parsed.pathname) || `prompt-example.${ext}`, mime),
+  };
 }
 
 async function saveRemoteImage(url, apiKey = '') {

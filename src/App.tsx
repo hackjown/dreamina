@@ -48,9 +48,9 @@ function MainLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-screen bg-[#0f111a] overflow-hidden">
+    <div className="flex h-screen w-full max-w-full bg-[#0f111a] overflow-hidden">
       <Sidebar currentUser={currentUser} onLogout={onLogout} />
-      <main className="flex-1 relative h-full overflow-y-auto custom-scrollbar pt-16 lg:pt-0">
+      <main className="flex-1 min-w-0 relative h-full overflow-y-auto overflow-x-hidden overscroll-x-none custom-scrollbar pt-16 lg:pt-0">
         {children}
       </main>
     </div>

@@ -3016,6 +3016,25 @@ function resolveGptImage2SizeFromRatio(ratio) {
   return GPT_IMAGE2_RATIO_TO_SIZE[String(ratio || '').trim()] || null;
 }
 
+function parseGptImage2MediaField(value) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function getGptImage2TranslationConfig() {
+  const settings = settingsService.getAllSettings();
+  return {
+    apiKey: settings.ecommerce_analysis_api_key || settings.ecommerce_api_key,
+    baseUrl: settings.ecommerce_analysis_api_url || settings.ecommerce_api_url,
+    model: settings.ecommerce_analysis_model || settings.ecommerce_model,
+  };
+}
+
 app.get('/api/gpt-image2/prompts', authenticate, (req, res) => {
   try {
     res.json({ success: true, data: gptImage2Service.listPromptLibrary() });
@@ -3026,28 +3045,53 @@ app.get('/api/gpt-image2/prompts', authenticate, (req, res) => {
 
 app.post('/api/gpt-image2/prompts', authenticate, upload.array('images', 4), async (req, res) => {
   try {
-    let media = [];
-    if (req.body.media) {
-      try {
-        media = JSON.parse(req.body.media);
-      } catch {
-        media = [];
-      }
-    }
-    const settings = settingsService.getAllSettings();
     const item = await gptImage2Service.addCustomPrompt({
       text: req.body.text,
       author: req.body.author || req.user?.username || '自定义',
       lang: req.body.lang || 'zh',
       files: req.files || [],
-      media,
-      translationConfig: {
-        apiKey: settings.ecommerce_analysis_api_key || settings.ecommerce_api_key,
-        baseUrl: settings.ecommerce_analysis_api_url || settings.ecommerce_api_url,
-        model: settings.ecommerce_analysis_model || settings.ecommerce_model,
-      },
+      media: parseGptImage2MediaField(req.body.media),
+      translationConfig: getGptImage2TranslationConfig(),
     });
     res.json({ success: true, data: item });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+app.put('/api/gpt-image2/prompts/:id', authenticate, upload.array('images', 4), async (req, res) => {
+  try {
+    const item = await gptImage2Service.updatePrompt({
+      id: req.params.id,
+      text: req.body.text,
+      author: req.body.author || req.user?.username || '自定义',
+      lang: req.body.lang || 'zh',
+      files: req.files || [],
+      media: parseGptImage2MediaField(req.body.media),
+      translationConfig: getGptImage2TranslationConfig(),
+    });
+    res.json({ success: true, data: item });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/gpt-image2/prompts/:id', authenticate, (req, res) => {
+  try {
+    const result = gptImage2Service.deletePrompt(req.params.id);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/gpt-image2/prompt-media-download', authenticate, async (req, res) => {
+  try {
+    const file = await gptImage2Service.fetchPromptMediaForDownload(req.query.url);
+    const encodedName = encodeURIComponent(file.fileName || 'prompt-example.png');
+    res.setHeader('Content-Type', file.mime || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedName}`);
+    res.send(file.buffer);
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
   }

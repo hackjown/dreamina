@@ -104,6 +104,8 @@ export default function GptImage2Page() {
   const [loadingPrompts, setLoadingPrompts] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [savingPrompt, setSavingPrompt] = useState(false);
+  const [updatingPrompt, setUpdatingPrompt] = useState(false);
+  const [deletingPrompt, setDeletingPrompt] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -234,7 +236,22 @@ export default function GptImage2Page() {
     if (!response.ok || !result.success) {
       throw new Error(result.error || '加载提示词库失败');
     }
-    setPrompts(result.data || []);
+    const nextPrompts = result.data || [];
+    setPrompts(nextPrompts);
+    return nextPrompts as PromptItem[];
+  };
+
+  const appendPromptMediaToForm = (formData: FormData, media: PromptMedia[] = []) => {
+    const normalizedMedia = media
+      .filter((item) => item.url)
+      .slice(0, 4)
+      .map((item) => ({
+        type: item.type || 'photo',
+        url: item.url,
+        width: item.width,
+        height: item.height,
+      }));
+    formData.append('media', JSON.stringify(normalizedMedia));
   };
 
   const handleSavePrompt = async () => {
@@ -249,6 +266,7 @@ export default function GptImage2Page() {
       formData.append('text', prompt.trim());
       formData.append('author', '自定义');
       formData.append('lang', language);
+      appendPromptMediaToForm(formData, []);
       promptExampleImages.forEach((file) => formData.append('images', file));
 
       const response = await fetch('/api/gpt-image2/prompts', {
@@ -267,6 +285,46 @@ export default function GptImage2Page() {
       setError(err instanceof Error ? err.message : '保存提示词失败');
     } finally {
       setSavingPrompt(false);
+    }
+  };
+
+  const handleUpdatePrompt = async () => {
+    setError('');
+    if (!selectedPrompt) {
+      setError('请先从词库选择要修改的提示词');
+      return;
+    }
+    if (!prompt.trim()) {
+      setError('提示词不能为空');
+      return;
+    }
+    setUpdatingPrompt(true);
+    try {
+      const formData = new FormData();
+      formData.append('text', prompt.trim());
+      formData.append('author', selectedPrompt.author || '自定义');
+      formData.append('lang', language);
+      appendPromptMediaToForm(formData, selectedPrompt.media);
+      promptExampleImages.forEach((file) => formData.append('images', file));
+
+      const response = await fetch(`/api/gpt-image2/prompts/${encodeURIComponent(selectedPrompt.id)}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: formData,
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || '保存修改失败');
+      }
+      const nextPrompts = await reloadPrompts();
+      setSelectedPromptId(result.data?.id || selectedPrompt.id);
+      const nextPrompt = nextPrompts.find((item) => item.id === (result.data?.id || selectedPrompt.id));
+      if (nextPrompt) setPrompt(getPromptTextForLanguage(nextPrompt, language));
+      setPromptExampleImages([]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存修改失败');
+    } finally {
+      setUpdatingPrompt(false);
     }
   };
 
@@ -302,6 +360,67 @@ export default function GptImage2Page() {
     setPrompt('');
     setSelectedPromptId('');
     setPromptExampleImages([]);
+  };
+
+  const handleDeletePrompt = async () => {
+    setError('');
+    if (!selectedPrompt) {
+      setError('请先从词库选择要删除的提示词');
+      return;
+    }
+    const confirmed = window.confirm('确定删除当前选中的提示词吗？');
+    if (!confirmed) return;
+
+    setDeletingPrompt(true);
+    try {
+      const response = await fetch(`/api/gpt-image2/prompts/${encodeURIComponent(selectedPrompt.id)}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || '删除提示词失败');
+      }
+      await reloadPrompts();
+      setSelectedPromptId('');
+      setPrompt('');
+      setPromptExampleImages([]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除提示词失败');
+    } finally {
+      setDeletingPrompt(false);
+    }
+  };
+
+  const getPromptMediaDownloadUrl = (media: PromptMedia) => (
+    `/api/gpt-image2/prompt-media-download?url=${encodeURIComponent(media.url)}`
+  );
+
+  const handleDownloadPromptMedia = async (media: PromptMedia, index: number) => {
+    setError('');
+    try {
+      const response = await fetch(getPromptMediaDownloadUrl(media), {
+        headers: getAuthHeaders(),
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => null);
+        throw new Error(result?.error || '下载示例图失败');
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const contentDisposition = response.headers.get('content-disposition') || '';
+      const match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/);
+      const fileName = match?.[1] ? decodeURIComponent(match[1]) : `prompt-example-${index + 1}.jpg`;
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '下载示例图失败');
+    }
   };
 
   const renderRatioIcon = (item: typeof ASPECT_RATIO_OPTIONS[number], active: boolean) => {
@@ -442,11 +561,27 @@ export default function GptImage2Page() {
                     </button>
                     <button
                       type="button"
+                      onClick={handleUpdatePrompt}
+                      disabled={!selectedPrompt || updatingPrompt}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/40 text-xs text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {updatingPrompt ? '保存中...' : '保存修改'}
+                    </button>
+                    <button
+                      type="button"
                       onClick={handleSavePrompt}
                       disabled={savingPrompt}
                       className="px-3 py-1.5 rounded-lg bg-fuchsia-500/10 border border-fuchsia-500/40 text-xs text-fuchsia-200 hover:bg-fuchsia-500/20 disabled:opacity-50"
                     >
                       {savingPrompt ? '保存中...' : '加入词库'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeletePrompt}
+                      disabled={!selectedPrompt || deletingPrompt}
+                      className="px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/40 text-xs text-red-200 hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {deletingPrompt ? '删除中...' : '删除'}
                     </button>
                     <button
                       type="button"
@@ -467,7 +602,7 @@ export default function GptImage2Page() {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-medium text-gray-300">词库示例图片</p>
-                      <p className="text-xs text-gray-500 mt-1">保存到词库时一并展示，最多 4 张。</p>
+                      <p className="text-xs text-gray-500 mt-1">保存到词库时一并展示，最多 4 张；选中词库项后可下载已有示例图。</p>
                     </div>
                     <label className="cursor-pointer rounded-lg border border-gray-700 px-3 py-2 text-xs text-gray-300 hover:border-fuchsia-500 hover:text-white">
                       选择图片
@@ -480,6 +615,22 @@ export default function GptImage2Page() {
                       />
                     </label>
                   </div>
+                  {selectedPrompt?.media?.length ? (
+                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {selectedPrompt.media.slice(0, 4).map((media, index) => (
+                        <div key={`${media.url}-${index}`} className="overflow-hidden rounded-md border border-gray-800 bg-black">
+                          <img src={media.url} alt="" className="aspect-square w-full object-cover" loading="lazy" />
+                          <button
+                            type="button"
+                            onClick={() => void handleDownloadPromptMedia(media, index)}
+                            className="w-full px-2 py-1.5 text-xs text-gray-300 bg-gray-900 hover:bg-gray-800"
+                          >
+                            下载示例图
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                   {promptExampleImages.length > 0 && (
                     <div className="mt-3 grid grid-cols-4 gap-2">
                       {promptExampleImages.map((file) => (
